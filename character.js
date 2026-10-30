@@ -41,14 +41,22 @@ const FIGURES = {
   dad: { url: 'assets/dad_1958.json', m: 1.78 },
   kid: { url: 'assets/relu_kid.json', m: 1.4 },       // Relu at about 10, Jerusalem 1966
   teacher: { url: 'assets/teacher.json', m: 1.6 },    // his piano teacher
+  teen: { url: 'assets/relu_teen.json', m: 1.55 },    // Relu at 13, Leyada 1969
+  classmate: { url: 'assets/classmate.json', m: 1.5 },
+  mathTeacher: { url: 'assets/math_teacher.json', m: 1.75 },
 };
-const figures = {};
+const figures = {}, pending = {};
 
-export async function loadCharacters() {
-  relu = prepRig(await loadGltf('assets/relu_toddler.json'), CLIPS.jump);
-  await Promise.all(Object.entries(FIGURES).map(async ([k, f]) => {
-    try { figures[k] = prepRig(await loadGltf(f.url)); } catch { /* fall back to the hand-built figures */ }
-  }));
+// toddler Relu is needed from the title screen on; everyone else loads with the level that uses them
+export async function loadCharacters(keys = []) {
+  relu ||= prepRig(await loadGltf('assets/relu_toddler.json'), CLIPS.jump);
+  await loadFigures(keys);
+}
+
+export function loadFigures(keys) {
+  return Promise.all(keys.filter(k => FIGURES[k]).map(k => pending[k] ||= (async () => {
+    try { figures[k] = prepRig(await loadGltf(FIGURES[k].url)); } catch { /* fall back to the hand-built figures */ }
+  })()));
 }
 
 // A person who plays whichever of their clips matches the mode ("wave", "idle", "sit", "clap", ...).

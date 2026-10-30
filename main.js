@@ -4,9 +4,10 @@ import { EffectComposer } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examp
 import { RenderPass } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/postprocessing/RenderPass.js/+esm';
 import { UnrealBloomPass } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/postprocessing/UnrealBloomPass.js/+esm';
 import { OutputPass } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/postprocessing/OutputPass.js/+esm';
-import { makeBabyRelu, makeSuitcase, loadCharacters } from './character.js';
+import { makeBabyRelu, makeSuitcase, loadCharacters, loadFigures } from './character.js';
 import { Level1 } from './level1.js';
 import { Level2 } from './level2.js';
+import { Level3 } from './level3.js';
 import { loadModels, model } from './models.js';
 
 const $ = id => document.getElementById(id);
@@ -15,8 +16,11 @@ const SCREENS = ['screen-title', 'screen-map', 'screen-story', 'screen-howto', '
 const only = id => SCREENS.forEach(s => show(s, s === id));
 
 // ---------- the eight chapters ----------
+// `load` lists the sculpted props and rigged people each level needs; they download when it's opened
 const LEVELS = [
   { yr: '1958', name: 'בורחים לישראל', img: 'era1_toddler', ready: true, make: app => new Level1(app),
+    load: { models: ['plane', 'suitcase', 'teddy', 'piano', 'armchair', 'goose', 'houseA', 'houseB', 'tree', 'barrel', 'cart', 'lamp', 'bed', 'window',
+      'openCase', 'bottle', 'blanket', 'terminal', 'tower', 'luggageCart', 'fuelTruck'], figures: ['mom', 'dad'] },
     story: {
       date: 'פיאטרה נמץ, רומניה · 7.7.1958',
       title: 'בורחים לישראל',
@@ -34,6 +38,7 @@ const LEVELS = [
     hud: { labels: ['פיאטרה נמץ', 'לישראל ✈'], icon: '✉', hearts: true },
     result: { label: 'Israel · July 1958', title: 'רלו בדרך לישראל!', text: 'רלו עלה למטוס עם אמא ואבא.', mark: ['ISRAEL', '1958'] } },
   { yr: '1966', name: 'הפסנתר בירושלים', img: 'era2_piano', ready: true, make: app => new Level2(app),
+    load: { models: ['piano', 'pianoBench', 'archWindow', 'bookshelf', 'sofa', 'plant'], figures: ['kid', 'teacher'] },
     story: {
       date: 'ירושלים · 1966',
       title: 'הפסנתר בירושלים',
@@ -50,7 +55,24 @@ const LEVELS = [
     },
     hud: { labels: ['תחילת השיר', 'סוף השיר 🎵'], icon: '♪', hearts: false },
     result: { label: 'Jerusalem · 1966', title: 'איזה ביצוע!', text: 'המורה מחאה כפיים.', mark: ['JERUSALEM', '1966'] } },
-  { yr: '1960s', name: 'תלמיד מצטיין', img: 'era3_school' },
+  { yr: '1969', name: 'תלמיד מצטיין', img: 'era3_school', ready: true, make: app => new Level3(app),
+    load: { models: ['schoolDesk', 'bookshelf', 'plant'], figures: ['teen', 'classmate', 'mathTeacher'] },
+    story: {
+      date: 'תיכון ליד״ה, ירושלים · 1969',
+      title: 'תלמיד מצטיין',
+      body: [
+        'רלו בן 13 ולומד בליד״ה, בית הספר של האוניברסיטה העברית. הוא מהתלמידים הכי טובים בכיתה.',
+        'היום המורה למתמטיקה מפתיע את כולם: בוחן פתע! עזרו לרלו לענות נכון ומהר על כל השאלות.',
+      ],
+      photos: ['assets/era3_school.jpg'],
+    },
+    howto: {
+      title: 'בוחן פתע!', go: 'מתחילים!',
+      text: 'שאלה מופיעה על הלוח. בחרו את התשובה הנכונה לפני שהגיר נגמר.',
+      items: [['👆', 'הקישו על התשובה', 'או המקשים 1–3'], ['⏱', 'מהר יותר', 'יותר נקודות'], ['✓', 'יותר תשובות נכונות', 'יותר כוכבים']],
+    },
+    hud: { labels: ['שאלה ראשונה', 'סוף הבוחן 📝'], icon: '✓', hearts: false },
+    result: { label: 'Leyada · 1969', title: 'תלמיד מצטיין!', text: 'המורה כתב "מצוין" על הבוחן.', mark: ['LEYADA', '1969'] } },
   { yr: '1970s', name: 'הקצין', img: 'era4_soldier' },
   { yr: 'הדסה', name: 'ד״ר אברהם', img: 'era5_doctor' },
   { yr: '1980', name: 'אלין', img: 'era6_aline' },
@@ -67,7 +89,9 @@ renderer.toneMappingExposure = 0.92;
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 $('stage').appendChild(renderer.domElement);
-await Promise.all([loadCharacters(), loadModels()]);
+// the title screen and the first level are ready before the start button; the rest load as they're opened
+await Promise.all([loadCharacters(LEVELS[0].load.figures), loadModels(LEVELS[0].load.models)]);
+const loadLevel = i => { const L = LEVELS[i].load || {}; return Promise.all([loadModels(L.models || []), loadFigures(L.figures || [])]); };
 // the start button waits (and says so) until every sculpted model has arrived
 Object.assign($('btn-start'), { disabled: false, textContent: 'יוצאים לדרך' });
 const env = studioEnv(renderer);
@@ -175,13 +199,17 @@ const app = {
   },
   openStory(i) {
     const L = LEVELS[i]; this.levelIndex = i;
+    loadLevel(i);   // start downloading while the story is read
     $('story-date').textContent = L.story.date;
     $('story-title').textContent = L.story.title;
     $('story-body').innerHTML = L.story.body.map(p => `<p>${p}</p>`).join('');
     $('story-photos').innerHTML = L.story.photos.map(src => `<img src="${src}" alt="">`).join('');
     only('screen-story');
   },
-  startLevel() {
+  async startLevel() {
+    const loading = loadLevel(this.levelIndex);
+    const slow = setTimeout(() => this.toast('טוען את השלב…'), 300);
+    await loading; clearTimeout(slow);
     this.fade(() => {
       only(null);
       this.endLevel();

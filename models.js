@@ -30,12 +30,20 @@ const SPECS = {
   tower:    { h: 13 },
   luggageCart: { l: 3.4 },
   fuelTruck: { l: 7 },
+  // Level 3 · Leyada 1969
+  schoolDesk: { l: 2.6 },
 };
 
-const loaded = {};
+const loaded = {}, pending = {};
 
-export async function loadModels() {
-  await Promise.all(Object.entries(SPECS).map(async ([name, spec]) => {
+// Each level loads only the props it uses, the first time it's opened, so phones don't download
+// the whole game up front. Names already loaded (or loading) are skipped.
+export function loadModels(names) {
+  return Promise.all(names.filter(n => SPECS[n]).map(name => pending[name] ||= loadOne(name, SPECS[name])));
+}
+
+async function loadOne(name, spec) {
+  {
     let gltf;
     try { gltf = await loadGltf(`assets/${name}.json`); } catch { return; }   // not made yet: callers fall back
     const root = new THREE.Group();
@@ -60,7 +68,7 @@ export async function loadModels() {
       if (hit) m.position.y -= hit.point.y;
     }
     loaded[name] = root;
-  }));
+  }
 }
 
 export const hasModel = name => !!loaded[name];
