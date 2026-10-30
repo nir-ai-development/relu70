@@ -1,0 +1,276 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>המסע של רלו</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Secular+One&family=Varela+Round&family=Courier+Prime:wght@400;700&display=swap">
+<style>
+/* Layout: full-screen 3D stage; every menu is a 1958 travel document / airmail postcard laid over it.
+   Single deliberate look (paper + ink over a painted sky), so no dark-mode variant. */
+:root {
+  color-scheme: light;
+  --paper: #e6eadb;        /* the certificate's sea-green paper */
+  --paper-deep: #cfd8c2;
+  --ink: #1c2a4a;          /* fountain-pen navy */
+  --ink-soft: #4d5b78;
+  --postmark: #6d3a86;     /* violet rubber stamp */
+  --mail-red: #c63a3a;
+  --mail-blue: #2b55a3;
+  --gold: #f0b93a;
+  --night: #16213a;
+  --font-display: "Secular One", "Arial Hebrew", "Segoe UI", sans-serif;
+  --font-body: "Varela Round", "Arial Hebrew", "Segoe UI", sans-serif;
+  --font-doc: "Courier Prime", "Courier New", monospace;
+}
+[hidden] { display: none !important; }
+html, body { height: 100%; margin: 0; }
+body { background: var(--night); color: var(--ink); font-family: var(--font-body); overflow: hidden; touch-action: none; user-select: none; -webkit-user-select: none; }
+#stage { position: fixed; inset: 0; }
+#stage canvas { display: block; width: 100%; height: 100%; }
+/* soft cinematic vignette over the 3D view */
+#stage::after { content: ''; position: absolute; inset: 0; pointer-events: none; background: radial-gradient(ellipse at 50% 45%, transparent 55%, rgba(25,18,10,.32) 100%); }
+
+.screen { position: fixed; inset: 0; display: grid; place-items: center; z-index: 20;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: max(16px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-bottom, 0px));
+  overflow-y: auto; overflow-x: hidden; }
+.screen.dim { background: rgba(22, 33, 58, .55); backdrop-filter: blur(3px); }
+
+/* airmail card */
+.card { position: relative; width: min(560px, 100%); background: var(--paper); border-radius: 6px; padding: 26px 24px 22px;
+  box-shadow: 0 18px 50px rgba(0,0,0,.35); }
+.card::before { content: ""; position: absolute; inset: 0; border-radius: 6px; padding: 7px; pointer-events: none;
+  background: repeating-linear-gradient(-45deg, var(--mail-red) 0 14px, var(--paper) 14px 22px, var(--mail-blue) 22px 36px, var(--paper) 36px 44px);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; }
+.doc-label { font-family: var(--font-doc); font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-soft); direction: ltr; }
+h1, h2, h3 { font-family: var(--font-display); font-weight: 400; margin: 0; text-wrap: balance; line-height: 1.1; }
+p { margin: 0; line-height: 1.55; }
+
+.btn { font-family: var(--font-display); font-size: 22px; border: 0; cursor: pointer; color: #fff; background: var(--mail-red);
+  padding: 12px 28px; border-radius: 999px; box-shadow: 0 4px 0 #8f2424; transition: transform .08s; }
+.btn:active { transform: translateY(3px); box-shadow: 0 1px 0 #8f2424; }
+.btn.secondary { background: var(--mail-blue); box-shadow: 0 4px 0 #1b3870; }
+.btn.ghost { background: transparent; color: var(--ink); box-shadow: none; text-decoration: underline; font-size: 18px; }
+.btn:focus-visible, .stamp:focus-visible, .icon-btn:focus-visible { outline: 3px solid var(--gold); outline-offset: 3px; }
+.row { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; align-items: center; }
+
+/* title */
+#screen-title { place-items: end center; }
+.title-block { text-align: center; color: #fff; display: grid; gap: 14px; justify-items: center; margin-bottom: 4vh; }
+.title-block .eyebrow { font-family: var(--font-doc); letter-spacing: .3em; font-size: 13px; opacity: .85; direction: ltr; }
+.title-block h1 { font-size: clamp(48px, min(11vw, 13vh), 104px); color: #fff; text-shadow: 0 4px 0 var(--mail-red), 0 10px 30px rgba(0,0,0,.4); }
+.title-block p { font-size: 18px; text-shadow: 0 2px 8px rgba(0,0,0,.5); }
+
+/* passport map */
+.passport { width: min(880px, 100%); background: var(--paper); border-radius: 10px; padding: 22px 20px 26px; box-shadow: 0 18px 50px rgba(0,0,0,.4);
+  background-image: radial-gradient(circle at 20% 20%, rgba(255,255,255,.5), transparent 40%), repeating-linear-gradient(0deg, transparent 0 22px, rgba(28,42,74,.05) 22px 23px); }
+.passport header { display: flex; justify-content: space-between; align-items: end; gap: 12px; margin-bottom: 18px; flex-wrap: wrap; }
+.passport h2 { font-size: 34px; }
+.stamps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+@media (max-width: 640px) { .stamps { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.stamp { position: relative; border: 0; padding: 8px 8px 10px; background: #fffdf4; cursor: pointer; text-align: center; font: inherit; color: var(--ink);
+  /* perforated edge: a punched-hole pattern unioned with a solid inner panel */
+  --perf: radial-gradient(circle, transparent 3.5px, #000 4px);
+  -webkit-mask: var(--perf) -6px -6px / 12px 12px, linear-gradient(#000 0 0) content-box;
+  mask: var(--perf) -6px -6px / 12px 12px, linear-gradient(#000 0 0) content-box;
+  filter: drop-shadow(0 3px 4px rgba(0,0,0,.25)); transition: transform .15s; }
+.stamp:nth-child(odd) { transform: rotate(-1.5deg); } .stamp:nth-child(even) { transform: rotate(1.2deg); }
+.stamp:hover:not([disabled]) { transform: rotate(0) scale(1.04); }
+.stamp img { width: 100%; aspect-ratio: 1/1; object-fit: cover; display: block; filter: sepia(.35) contrast(1.05); }
+.stamp .yr { font-family: var(--font-doc); font-weight: 700; font-size: 13px; margin-top: 6px; display: block; direction: ltr; }
+.stamp .nm { font-family: var(--font-display); font-size: 17px; display: block; line-height: 1.15; }
+.stamp[disabled] { cursor: default; }
+.stamp[disabled] img { filter: grayscale(1) brightness(.8) contrast(.9); }
+.stamp .soon { position: absolute; top: 34%; inset-inline: 10px; font-family: var(--font-display); color: var(--postmark); border: 3px solid var(--postmark);
+  border-radius: 6px; padding: 2px 4px; transform: rotate(-12deg); background: rgba(255,253,244,.75); font-size: 16px; }
+.stamp .done { position: absolute; top: 10px; left: 6px; width: 64px; height: 64px; border-radius: 50%; border: 3px double var(--postmark); color: var(--postmark);
+  display: grid; place-items: center; font-family: var(--font-display); font-size: 14px; line-height: 1; transform: rotate(-16deg); background: rgba(255,253,244,.55); }
+.stamp .stars { color: var(--gold); font-size: 15px; letter-spacing: 2px; display: block; min-height: 18px; text-shadow: 0 1px 0 #9a6b00; }
+
+/* story postcard */
+.story { width: min(760px, 100%); display: grid; grid-template-columns: 1fr 1.15fr; gap: 22px; align-items: center; }
+@media (max-width: 640px) { .story { grid-template-columns: 1fr; } }
+.photos { position: relative; min-height: 350px; }
+.photos img:only-child { position: relative; width: 80%; }
+.photos img { position: absolute; background: #fff; padding: 8px 8px 22px; box-shadow: 0 6px 16px rgba(0,0,0,.3); width: 58%; }
+.photos img:nth-child(1) { top: 0; right: 0; transform: rotate(4deg); }
+.photos img:nth-child(2) { bottom: 0; left: 0; transform: rotate(-5deg); width: 62%; }
+.story-text { display: grid; gap: 12px; }
+.story-text h2 { font-size: 36px; }
+.story-text .date { font-family: var(--font-doc); color: var(--postmark); font-weight: 700; font-size: 15px; }
+.story-text p { font-size: 17px; }
+
+/* how-to */
+.howto { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 16px 0 20px; text-align: center; }
+.howto div { background: #fffdf4; border-radius: 8px; padding: 12px 6px; font-size: 15px; line-height: 1.3; }
+.howto b { display: block; font-family: var(--font-display); font-weight: 400; font-size: 30px; color: var(--mail-blue); }
+.howto small { display: block; color: var(--ink-soft); font-size: 12px; margin-top: 4px; }
+
+/* HUD */
+#hud { position: fixed; top: 0; inset-inline: 0; z-index: 10; pointer-events: none; display: flex; justify-content: space-between; align-items: start; gap: 10px;
+  padding-top: calc(10px + env(safe-area-inset-top, 0px)); padding-left: max(12px, env(safe-area-inset-left, 0px)); padding-right: max(12px, env(safe-area-inset-right, 0px)); }
+.chip { background: rgba(230,234,219,.94); border-radius: 999px; padding: 6px 14px; font-family: var(--font-display); font-size: 20px; display: flex; gap: 8px; align-items: center;
+  box-shadow: 0 3px 10px rgba(0,0,0,.25); font-variant-numeric: tabular-nums; }
+.hearts { color: var(--mail-red); letter-spacing: 3px; }
+.hearts .lost { color: #b9bfae; }
+.progress { flex: 1; max-width: 420px; margin-top: 4px; }
+.progress .bar { position: relative; height: 12px; background: rgba(230,234,219,.9); border-radius: 999px; box-shadow: 0 3px 10px rgba(0,0,0,.25); }
+.progress .fill { position: absolute; inset-block: 0; left: 0; width: 0; border-radius: 999px; background: linear-gradient(90deg, var(--mail-blue), #5b8be0); }
+.progress .labels { display: flex; justify-content: space-between; color: #fff; font-size: 13px; margin-top: 4px; text-shadow: 0 1px 4px rgba(0,0,0,.7); }
+.icon-btn { pointer-events: auto; width: 44px; height: 44px; border-radius: 50%; border: 0; background: rgba(230,234,219,.94); color: var(--ink); font-size: 18px; cursor: pointer;
+  box-shadow: 0 3px 10px rgba(0,0,0,.25); display: grid; place-items: center; }
+.hud-side { display: flex; gap: 8px; align-items: center; }
+
+/* packing checklist */
+#pack-ui { position: fixed; bottom: 0; inset-inline: 0; z-index: 10; display: grid; justify-items: center; gap: 8px; pointer-events: none;
+  padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px)); padding-left: max(12px, env(safe-area-inset-left, 0px)); padding-right: max(12px, env(safe-area-inset-right, 0px)); }
+.pack-title { font-family: var(--font-display); font-size: 22px; color: #fff; text-shadow: 0 2px 8px rgba(0,0,0,.6); text-align: center; }
+.checklist { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; background: rgba(230,234,219,.95); padding: 8px 10px; border-radius: 12px; box-shadow: 0 4px 14px rgba(0,0,0,.3); }
+.checklist span { font-size: 15px; padding: 3px 9px; border-radius: 999px; background: #fffdf4; white-space: nowrap; }
+.checklist span.got { background: var(--mail-blue); color: #fff; text-decoration: line-through; }
+
+#toast { position: fixed; top: 22%; left: 50%; transform: translate(-50%, -10px); z-index: 30; pointer-events: none; opacity: 0; transition: opacity .25s, transform .25s;
+  background: var(--paper); color: var(--ink); font-family: var(--font-display); font-size: 22px; padding: 10px 20px; border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.35);
+  max-width: calc(100% - 32px); text-align: center; border: 3px solid var(--postmark); }
+#toast.show { opacity: 1; transform: translate(-50%, 0); }
+#fade { position: fixed; inset: 0; background: var(--night); z-index: 40; pointer-events: none; opacity: 0; transition: opacity .45s; }
+#fade.on { opacity: 1; }
+
+/* results */
+.result { text-align: center; display: grid; gap: 14px; justify-items: center; }
+.big-stars { font-size: 54px; letter-spacing: 8px; color: #c9ccbd; }
+.big-stars .on { color: var(--gold); text-shadow: 0 3px 0 #9a6b00; display: inline-block; animation: pop .5s backwards; }
+.postmark { width: 130px; height: 130px; border-radius: 50%; border: 4px double var(--postmark); color: var(--postmark); display: grid; place-items: center; text-align: center;
+  font-family: var(--font-display); font-size: 17px; line-height: 1.15; transform: rotate(-14deg); animation: thump .45s .6s backwards; }
+.postmark small { font-family: var(--font-doc); font-size: 12px; display: block; }
+@keyframes pop { from { transform: scale(0) rotate(-40deg); } 70% { transform: scale(1.3); } }
+@keyframes thump { from { transform: rotate(-14deg) scale(2.2); opacity: 0; } 80% { transform: rotate(-14deg) scale(.95); opacity: 1; } }
+/* phones: buttons and counters on one row, the journey bar full-width on its own row below */
+@media (max-width: 640px) {
+  #hud { flex-wrap: wrap; row-gap: 8px; }
+  .progress { order: 3; flex-basis: 100%; max-width: none; margin-top: 0; }
+  .progress .bar { height: 10px; }
+  .progress .labels { font-size: 12px; }
+  .chip { font-size: 16px; padding: 5px 11px; gap: 6px; }
+  .hearts { letter-spacing: 1px; }
+}
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+
+#rotate-hint { display: none; }
+</style>
+
+<div id="stage"></div>
+
+<!-- title -->
+<section id="screen-title" class="screen">
+  <div class="title-block" dir="rtl">
+    <span class="eyebrow">PIATRA NEAMȚ 1956 → ISRAEL 2026</span>
+    <h1>המסע של רלו</h1>
+    <p>70 שנה, 8 שלבים. שחקו את החיים של סבא.</p>
+    <div class="row"><button class="btn" id="btn-start" disabled>טוען את העולם…</button></div>
+  </div>
+</section>
+
+<!-- passport / level map -->
+<section id="screen-map" class="screen dim" hidden>
+  <div class="passport" dir="rtl">
+    <header>
+      <div>
+        <span class="doc-label">Certificat de Călătorie · Nr. M 007554</span>
+        <h2>הדרכון של רלו</h2>
+      </div>
+      <button class="btn ghost" id="btn-map-back">לשער</button>
+    </header>
+    <div class="stamps" id="stamps"></div>
+  </div>
+</section>
+
+<!-- story postcard -->
+<section id="screen-story" class="screen dim" hidden>
+  <div class="card story" dir="rtl">
+    <div class="photos" id="story-photos"></div>
+    <div class="story-text">
+      <span class="date" id="story-date"></span>
+      <h2 id="story-title"></h2>
+      <div id="story-body" style="display:grid;gap:10px"></div>
+      <div class="row" style="justify-content:flex-start;margin-top:6px">
+        <button class="btn" id="btn-story-play">שחק</button>
+        <button class="btn ghost" id="btn-story-back">חזרה לדרכון</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- how to play the run -->
+<section id="screen-howto" class="screen dim" hidden>
+  <div class="card" dir="rtl" style="text-align:center">
+    <span class="doc-label">Instrucțiuni</span>
+    <h2 style="font-size:32px;margin-top:6px" id="howto-title"></h2>
+    <p style="margin-top:8px" id="howto-text"></p>
+    <div class="howto" id="howto-items"></div>
+    <button class="btn" id="btn-howto-go"></button>
+  </div>
+</section>
+
+<!-- in-game HUD -->
+<div id="hud" hidden>
+  <div class="hud-side">
+    <button class="icon-btn" id="btn-pause" aria-label="השהיה">❚❚</button>
+    <button class="icon-btn" id="btn-sound" aria-label="צליל">♪</button>
+  </div>
+  <div class="progress" id="hud-progress" dir="ltr" hidden>
+    <div class="bar"><div class="fill" id="hud-fill"></div></div>
+    <div class="labels" dir="ltr"><span dir="rtl" id="hud-label-a"></span><span dir="rtl" id="hud-label-b"></span></div>
+  </div>
+  <div class="hud-side">
+    <div class="chip" id="hud-stamps" hidden><span id="hud-stamp-icon">✉</span> <span id="hud-stamp-n">0</span></div>
+    <div class="chip hearts" id="hud-hearts" hidden></div>
+  </div>
+</div>
+
+<div id="pack-ui" hidden>
+  <div class="pack-title">ארזו למזוודה רק את מה שתינוק צריך לטיסה</div>
+  <div class="checklist" id="checklist" dir="rtl"></div>
+</div>
+
+<section id="screen-pause" class="screen dim" hidden>
+  <div class="card" dir="rtl" style="text-align:center;display:grid;gap:16px;justify-items:center">
+    <h2 style="font-size:34px">הפסקה קטנה</h2>
+    <div class="row">
+      <button class="btn" id="btn-resume">ממשיכים</button>
+      <button class="btn secondary" id="btn-quit">לדרכון</button>
+    </div>
+  </div>
+</section>
+
+<section id="screen-fail" class="screen dim" hidden>
+  <div class="card" dir="rtl" style="text-align:center;display:grid;gap:14px;justify-items:center">
+    <span class="doc-label">Oops</span>
+    <h2 style="font-size:34px">אוי, רלו נפל!</h2>
+    <p>לא נורא, תינוקות נופלים וקמים. המטוס עוד מחכה.</p>
+    <div class="row">
+      <button class="btn" id="btn-retry">עוד פעם</button>
+      <button class="btn secondary" id="btn-fail-map">לדרכון</button>
+    </div>
+  </div>
+</section>
+
+<section id="screen-result" class="screen dim" hidden>
+  <div class="card result" dir="rtl">
+    <span class="doc-label" id="result-label">Israel · July 1958</span>
+    <h2 style="font-size:36px" id="result-title">רלו בדרך לישראל!</h2>
+    <div class="big-stars" id="result-stars"></div>
+    <p id="result-text"></p>
+    <div class="postmark" id="result-postmark"></div>
+    <div class="row">
+      <button class="btn" id="btn-result-map">לדרכון</button>
+      <button class="btn secondary" id="btn-result-again">עוד פעם</button>
+    </div>
+  </div>
+</section>
+
+<div id="toast"></div>
+<div id="fade"></div>
+
+<script type="module" src="main.js"></script>
