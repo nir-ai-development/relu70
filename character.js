@@ -44,6 +44,14 @@ const FIGURES = {
   teen: { url: 'assets/relu_teen.json', m: 1.55 },    // Relu at 13, Leyada 1969
   classmate: { url: 'assets/classmate.json', m: 1.5 },
   mathTeacher: { url: 'assets/math_teacher.json', m: 1.75 },
+  officer: { url: 'assets/relu_officer.json', m: 1.78 },   // Relu at 20, IDF officer (also his 1980 look)
+  soldier: { url: 'assets/soldier.json', m: 1.75 },
+  doctor: { url: 'assets/relu_doctor.json', m: 1.78 },     // Dr. Avraham, Hadassah
+  aline: { url: 'assets/aline.json', m: 1.65 },
+  father: { url: 'assets/relu_father.json', m: 1.78 },     // father of four, 1989
+  girlKid: { url: 'assets/girl_kid.json', m: 1.05 },
+  boyKid: { url: 'assets/boy_kid.json', m: 1.2 },
+  saba: { url: 'assets/saba.json', m: 1.75 },              // Saba Relu, 70
 };
 const figures = {}, pending = {};
 
@@ -71,16 +79,21 @@ export function makeFigure(which, height) {
   m.scale.setScalar(height / FIGURES[which].m);
   const mixer = new THREE.AnimationMixer(m);
   const clip = mode => gltf.animations.find(a => a.name.toLowerCase().includes(mode));
-  const fallback = clip('idle') || gltf.animations[0];
+  // people without an idle clip wave rather than run on the spot
+  const fallback = clip('idle') || clip('wave') || gltf.animations[0];
   let cur = null, lastT = null;
+  // someone with no idle clip stands still in the first frame of their walk instead
+  const still = !clip('idle') && clip('walk');
   root.userData.animate = (t, mode) => {
     const dt = lastT === null ? 0 : Math.min(0.1, Math.max(0, t - lastT)); lastT = t;
-    const c = clip(mode) || fallback;
+    const stand = mode === 'idle' && still;
+    const c = stand ? still : clip(mode) || fallback;
     if (c && c !== cur) {
       const next = mixer.clipAction(c).reset().play();
       if (cur) mixer.clipAction(cur).crossFadeTo(next, 0.25, false);
       cur = c;
     }
+    if (c) { const a = mixer.clipAction(c); a.paused = stand; if (stand) a.time = 0; }
     mixer.update(dt);
   };
   root.userData.bone = name => { let b = null; m.traverse(o => { if (!b && o.isBone && o.name.endsWith(name)) b = o; }); return b; };

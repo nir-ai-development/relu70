@@ -32,6 +32,18 @@ const SPECS = {
   fuelTruck: { l: 7 },
   // Level 3 · Leyada 1969
   schoolDesk: { l: 2.6 },
+  // Level 4 · IDF 1976
+  jeep:     { l: 7.2 },
+  armyTent: { l: 9 },
+  // Level 5 · Hadassah 1985
+  examBed:  { l: 4.2 },
+  medCabinet: { h: 4.0 },
+  // Level 6 · Jerusalem 1980
+  cafeTable: { l: 3.4 },
+  // Level 7 · 1989
+  lounger:  { l: 4.4 },
+  // Level 8 · 2026
+  cake:     { h: 1.6 },
 };
 
 const loaded = {}, pending = {};

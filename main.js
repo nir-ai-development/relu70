@@ -8,6 +8,11 @@ import { makeBabyRelu, makeSuitcase, loadCharacters, loadFigures } from './chara
 import { Level1 } from './level1.js';
 import { Level2 } from './level2.js';
 import { Level3 } from './level3.js';
+import { Level4 } from './level4.js';
+import { Level5 } from './level5.js';
+import { Level6 } from './level6.js';
+import { Level7 } from './level7.js';
+import { Level8 } from './level8.js';
 import { loadModels, model } from './models.js';
 
 const $ = id => document.getElementById(id);
@@ -73,11 +78,96 @@ const LEVELS = [
     },
     hud: { labels: ['שאלה ראשונה', 'סוף הבוחן 📝'], icon: '✓', hearts: false },
     result: { label: 'Leyada · 1969', title: 'תלמיד מצטיין!', text: 'המורה כתב "מצוין" על הבוחן.', mark: ['LEYADA', '1969'] } },
-  { yr: '1970s', name: 'הקצין', img: 'era4_soldier' },
-  { yr: 'הדסה', name: 'ד״ר אברהם', img: 'era5_doctor' },
-  { yr: '1980', name: 'אלין', img: 'era6_aline' },
-  { yr: '1983–1990', name: 'אבא לארבעה', img: 'era7_dad' },
-  { yr: '2013 →', name: 'סבא רלו', img: 'era8_saba' },
+  { yr: '1976', name: 'הקצין', img: 'era4_soldier', ready: true, make: app => new Level4(app),
+    load: { models: ['jeep', 'armyTent', 'tree'], figures: ['officer', 'soldier'] },
+    story: {
+      date: 'בסיס טירונים · 1976',
+      title: 'הקצין',
+      body: [
+        'רלו התגייס לצה״ל, ובזכות הכישרון והלב הגדול שלו הוא נשלח לקורס קצינים.',
+        'היום מבחן המסלול: להוביל את החיילים דרך המכשולים, ולהגיע לטקס הסיום ולקבל את הדרגות!',
+      ],
+      photos: ['assets/era4_soldier.jpg'],
+    },
+    howto: {
+      title: 'מסלול המכשולים!', go: 'קדימה, המפקד!',
+      text: 'קופצים מעל קירות וצמיגים, זוחלים מתחת לגדר התיל, ועוקפים שקי חול וג׳יפים.',
+      items: [['⇆', 'החלקה ימינה ושמאלה', 'מעבר נתיב'], ['⤒', 'החלקה למעלה', 'קפיצה'], ['⤓', 'החלקה למטה', 'זחילה מתחת לתיל']],
+    },
+    hud: { labels: ['טירונות', 'טקס סיום 🎖'], icon: '🎖', hearts: true },
+    result: { label: 'IDF · 1976', title: 'קצין בצה״ל!', text: 'רלו קיבל את הדרגות.', mark: ['IDF', '1976'] } },
+  { yr: 'הדסה', name: 'ד״ר אברהם', img: 'era5_doctor', ready: true, make: app => new Level5(app),
+    load: { models: ['examBed', 'medCabinet', 'plant'], figures: ['doctor', 'mom', 'dad', 'teacher'] },
+    story: {
+      date: 'הדסה, ירושלים · שנות ה-80',
+      title: 'ד״ר אברהם',
+      body: [
+        'רלו למד רפואה באוניברסיטה העברית ובהדסה, והפך לד״ר אברהם.',
+        'היום במרפאה יש תור ארוך! בדקו מה כואב לכל מטופל, ובחרו את הטיפול הנכון לפני שנגמרת לו הסבלנות.',
+      ],
+      photos: ['assets/era5_doctor.jpg'],
+    },
+    howto: {
+      title: 'יום במרפאה!', go: 'הבא בתור!',
+      text: 'כל מטופל אומר מה כואב לו. הקישו על הכלי הנכון לפני שהפס מתרוקן.',
+      items: [['🌡️', 'חום או צמרמורת', 'מדחום'], ['🩺', 'שיעול או דופק', 'סטטוסקופ'], ['🩹💊', 'פצע או כאב בטן', 'פלסטר או תרופה']],
+    },
+    hud: { labels: ['פתיחת המרפאה', 'סוף היום 🏥'], icon: '♥', hearts: false },
+    result: { label: 'Hadassah · 1985', title: 'רופא מעולה!', text: 'כל המטופלים יצאו מחייכים.', mark: ['HADASSAH', '1985'] } },
+  { yr: '1980', name: 'אלין', img: 'era6_aline', ready: true, make: app => new Level6(app),
+    load: { models: ['cafeTable'], figures: ['officer', 'aline'] },
+    story: {
+      date: 'ירושלים · 1980',
+      title: 'אלין',
+      body: [
+        'בשנת 1980 רלו, קצין צעיר, פוגש את אלין עטיה. מהרגע הראשון ברור שזה משהו מיוחד.',
+        'מצאו את כל הזוגות של הקלפים מהסיפור שלהם, וכל זוג יקרב את רלו ואלין אחד אל השנייה.',
+      ],
+      photos: ['assets/era6_aline.jpg'],
+    },
+    howto: {
+      title: 'משחק הזיכרון', go: 'מתחילים!',
+      text: 'הפכו שני קלפים בכל פעם. זוג תואם נשאר פתוח, ורלו ואלין מתקרבים.',
+      items: [['🃏', 'הקישו על קלף', 'כדי להפוך אותו'], ['❤️', 'מצאו זוג', 'הקלפים נשארים פתוחים'], ['★', 'פחות טעויות', 'יותר כוכבים']],
+    },
+    hud: { labels: ['הפגישה הראשונה', 'ביחד 💍'], icon: '❤', hearts: false },
+    result: { label: 'Jerusalem · 1980', title: 'רלו ואלין!', text: 'ומכאן הכול התחיל.', mark: ['RELU ♥ ALINE', '1980'] } },
+  { yr: '1983–1990', name: 'אבא לארבעה', img: 'era7_dad', ready: true, make: app => new Level7(app),
+    load: { models: ['lounger', 'tree'], figures: ['father', 'girlKid', 'boyKid'] },
+    story: {
+      date: 'שנות ה-80',
+      title: 'אבא לארבעה',
+      body: [
+        'רלו ואלין מתחתנים, ונולדים להם ארבעה ילדים: קרין, עידן, טל וניר.',
+        'אבא אוהב בריכות! הילדים קופצים למים אחד אחרי השני, ואבא צריך לתפוס את כולם.',
+      ],
+      photos: ['assets/era7_dad.jpg'],
+    },
+    howto: {
+      title: 'יום בבריכה!', go: 'קופצים!',
+      text: 'ילד קופץ, והעיגול על המים מראה איפה הוא ינחת. הזיזו את אבא לשם לפני שהוא נוחת.',
+      items: [['⇆', 'החלקה או נגיעה בצד', 'אבא זז ימינה ושמאלה'], ['◎', 'העיגול על המים', 'שם הילד ינחת'], ['★', 'יותר תפיסות', 'יותר כוכבים']],
+    },
+    hud: { labels: ['קפיצה ראשונה', 'כולם במים 🏊'], icon: '👶', hearts: false },
+    result: { label: 'Family · 1989', title: 'אבא הכי טוב!', text: 'קרין, עידן, טל וניר צוחקים במים.', mark: ['FAMILY', '1989'] } },
+  { yr: '2026', name: 'סבא רלו', img: 'era8_saba', ready: true, make: app => new Level8(app),
+    load: { models: ['cake', 'tree'], figures: ['saba', 'girlKid', 'boyKid'] },
+    story: {
+      date: 'נובמבר 2026',
+      title: 'סבא רלו',
+      body: [
+        'היום רלו הוא סבא אוהב לנכדים, ומוקף במשפחה גדולה.',
+        'ועכשיו הוא חוגג 70! הדליקו את הנרות על העוגה, ועזרו לסבא לכבות את כולם בנשיפה אחת.',
+      ],
+      photos: ['assets/era8_saba.jpg'],
+    },
+    howto: {
+      title: 'יום הולדת 70!', go: 'למסיבה!',
+      text: 'הקישו על המסך כדי להדליק את שבעת הנרות, ואז החזיקו את כפתור הנשיפה עד שכולם כבים.',
+      items: [['🕯️', 'הקשה', 'מדליקה נר'], ['🌬️', 'החזיקו את הכפתור', 'כדי לנשוף'], ['🎉', 'כל הנרות כבו', 'מסיבה!']],
+    },
+    hud: { labels: ['מדליקים', 'מזל טוב! 🎂'], icon: '🕯', hearts: false },
+    result: { label: 'Saba Relu · 70', title: 'מזל טוב, סבא!', text: 'עד 120!', mark: ['HAPPY 70', '2026'] } },
 ];
 
 // ---------- renderer ----------
@@ -330,6 +420,7 @@ renderer.domElement.addEventListener('pointerup', e => {
   if (L.phase === 'pack') { if (Math.hypot(dx, dy) < 25) L.packTap(e.clientX - r.x, e.clientY - r.y); }
   else if (L.phase === 'run') {
     if (Math.abs(dx) > 28 && Math.abs(dx) > Math.abs(dy)) L.move(dx > 0 ? 1 : -1);
+    else if (L.tapAt) L.tapAt((e.clientX - r.x) / r.w);
     else L.jump();
   }
   down = null;
@@ -340,6 +431,7 @@ renderer.domElement.addEventListener('pointermove', e => {
   const dx = e.clientX - down.x, dy = e.clientY - down.y;
   if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)) { app.level.move(dx > 0 ? 1 : -1); down = null; }
   else if (dy < -40 && Math.abs(dy) > Math.abs(dx)) { app.level.jump(); down = null; }
+  else if (dy > 40 && Math.abs(dy) > Math.abs(dx) && app.level.duck) { app.level.duck(); down = null; }
 });
 window.addEventListener('keydown', e => {
   const L = app.level;
@@ -349,6 +441,7 @@ window.addEventListener('keydown', e => {
   if (e.code === 'ArrowLeft' || e.code === 'KeyA') L.move(-1);
   else if (e.code === 'ArrowRight' || e.code === 'KeyD') L.move(1);
   else if (e.code === 'ArrowUp' || e.code === 'KeyW' || e.code === 'Space') { e.preventDefault(); L.jump(); }
+  else if ((e.code === 'ArrowDown' || e.code === 'KeyS') && L.duck) { e.preventDefault(); L.duck(); }
 });
 document.addEventListener('visibilitychange', () => { if (document.hidden && app.level && app.level.phase === 'run' && !app.level.paused && !app.level.ending) app.pause(true); });
 
@@ -376,4 +469,9 @@ renderer.setAnimationLoop(now => {
 // for quick testing: #level1 jumps straight into the level
 const jump = location.hash.match(/^#level(\d)/);
 if (jump && LEVELS[jump[1] - 1]?.make) { app.levelIndex = jump[1] - 1; app.startLevel(); }   // testing shortcut, also for levels not yet on the map
-if (location.hash.endsWith('debug')) window.app = app;
+if (location.hash.endsWith('debug')) {
+  window.app = app;
+  // testing aid: draw a frame on demand (the animation loop stops while the page is hidden)
+  app.renderNow = () => { const v = app.view; renderPass.scene = v.scene; renderPass.camera = v.camera; composer.render(); };
+  import('./testkit.js').catch(() => {});
+}
