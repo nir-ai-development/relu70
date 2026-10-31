@@ -5,7 +5,7 @@ import { clone as cloneSkinned } from 'https://cdn.jsdelivr.net/npm/three@0.160.
 const SKIN = 0xf3cba6, CHEEK = 0xf29a9a, HAIR = 0x2b1d16, EYE = 0x1a1414;
 
 // ---------- sculpted, rigged toddler Relu (Meshy model, Mixamo skeleton) ----------
-// game mode -> start of the clip name inside relu_toddler.json (Meshy numbers its idles: Idle_02, Idle_03, ...)
+// game mode -> start of the clip name inside relu_toddler.glb (Meshy numbers its idles: Idle_02, Idle_03, ...)
 const CLIPS = { run: 'Running', walk: 'Walking', idle: 'Idle_0', jump: 'Jump_Run', wave: 'Wave_One_Hand', cheer: 'happy_jump_m' };
 const SCALE = 2;   // the model is 0.9 m tall; the world is built around a ~1.8-unit toddler
 let relu = null;
@@ -37,27 +37,27 @@ function prepRig(gltf, jumpClip) {
 // Other rigged people (Meshy models, Mixamo skeleton); each is optional until its file exists.
 // `m` is the real height Meshy rigged the model at.
 const FIGURES = {
-  mom: { url: 'assets/mom_1958.json', m: 1.7 },
-  dad: { url: 'assets/dad_1958.json', m: 1.78 },
-  kid: { url: 'assets/relu_kid.json', m: 1.4 },       // Relu at about 10, Jerusalem 1966
-  teacher: { url: 'assets/teacher.json', m: 1.6 },    // his piano teacher
-  teen: { url: 'assets/relu_teen.json', m: 1.55 },    // Relu at 13, Leyada 1969
-  classmate: { url: 'assets/classmate.json', m: 1.5 },
-  mathTeacher: { url: 'assets/math_teacher.json', m: 1.75 },
-  officer: { url: 'assets/relu_officer.json', m: 1.78 },   // Relu at 20, IDF officer (also his 1980 look)
-  soldier: { url: 'assets/soldier.json', m: 1.75 },
-  doctor: { url: 'assets/relu_doctor.json', m: 1.78 },     // Dr. Avraham, Hadassah
-  aline: { url: 'assets/aline.json', m: 1.65 },
-  father: { url: 'assets/relu_father.json', m: 1.78 },     // father of four, 1989
-  girlKid: { url: 'assets/girl_kid.json', m: 1.05 },
-  boyKid: { url: 'assets/boy_kid.json', m: 1.2 },
-  saba: { url: 'assets/saba.json', m: 1.75 },              // Saba Relu, 70
+  mom: { url: 'assets/mom_1958.glb', m: 1.7 },
+  dad: { url: 'assets/dad_1958.glb', m: 1.78 },
+  kid: { url: 'assets/relu_kid.glb', m: 1.4 },       // Relu at about 10, Jerusalem 1966
+  teacher: { url: 'assets/teacher.glb', m: 1.6 },    // his piano teacher
+  teen: { url: 'assets/relu_teen.glb', m: 1.55 },    // Relu at 13, Leyada 1969
+  classmate: { url: 'assets/classmate.glb', m: 1.5 },
+  mathTeacher: { url: 'assets/math_teacher.glb', m: 1.75 },
+  officer: { url: 'assets/relu_officer.glb', m: 1.78 },   // Relu at 20, IDF officer (also his 1980 look)
+  soldier: { url: 'assets/soldier.glb', m: 1.75 },
+  doctor: { url: 'assets/relu_doctor.glb', m: 1.78 },     // Dr. Avraham, Hadassah
+  aline: { url: 'assets/aline.glb', m: 1.65 },
+  father: { url: 'assets/relu_father.glb', m: 1.78 },     // father of four, 1989
+  girlKid: { url: 'assets/girl_kid.glb', m: 1.05 },
+  boyKid: { url: 'assets/boy_kid.glb', m: 1.2 },
+  saba: { url: 'assets/saba.glb', m: 1.75 },              // Saba Relu, 70
 };
 const figures = {}, pending = {};
 
 // toddler Relu is needed from the title screen on; everyone else loads with the level that uses them
 export async function loadCharacters(keys = []) {
-  relu ||= prepRig(await loadGltf('assets/relu_toddler.json'), CLIPS.jump);
+  relu ||= prepRig(await loadGltf('assets/relu_toddler.glb'), CLIPS.jump);
   await loadFigures(keys);
 }
 

@@ -1,6 +1,7 @@
 // the +esm build is the same module instance the GLTFLoader/SkeletonUtils +esm builds import
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/+esm';
 import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/GLTFLoader.js/+esm';
+import { MeshoptDecoder } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/libs/meshopt_decoder.module.js/+esm';
 import { RoomEnvironment } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/environments/RoomEnvironment.js/+esm';
 export { THREE };
 
@@ -67,54 +68,15 @@ export function makeSky({ top = '#4f86cf', mid = '#a9cdec', horizon = '#fbe3c4',
 // ---------- glTF ----------
 // Artifacts can't serve .glb, so models ship as glTF JSON with the buffer embedded as base64.
 // Rebuild the binary GLB in memory so the loader never has to fetch a data: URL.
+// assets are packed offline with gltfpack (meshopt-compressed, smooth normals already baked in);
+// the JSON sources and the packing script live in Dad70/src_models
+const gltfLoader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
 export async function loadGltf(url) {
-  const json = await (await fetch(url)).json();
-  const b64 = json.buffers[0].uri.split(',')[1];
-  delete json.buffers[0].uri;
-  const bin = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
-  const js = new TextEncoder().encode(JSON.stringify(json));
-  const jsPad = (4 - js.length % 4) % 4, binPad = (4 - bin.length % 4) % 4;
-  const total = 12 + 8 + js.length + jsPad + 8 + bin.length + binPad;
-  const out = new Uint8Array(total), dv = new DataView(out.buffer);
-  dv.setUint32(0, 0x46546C67, true); dv.setUint32(4, 2, true); dv.setUint32(8, total, true);
-  dv.setUint32(12, js.length + jsPad, true); dv.setUint32(16, 0x4E4F534A, true);
-  out.set(js, 20); out.fill(0x20, 20 + js.length, 20 + js.length + jsPad);
-  const b = 20 + js.length + jsPad;
-  dv.setUint32(b, bin.length + binPad, true); dv.setUint32(b + 4, 0x004E4942, true);
-  out.set(bin, b + 8);
-  const gltf = await new GLTFLoader().parseAsync(out.buffer, '');
-  // the normal maps were baked against the old facet normals and squashed to small JPEGs: they only add blotches
-  gltf.scene.traverse(o => { if (o.isMesh) { smoothNormals(o.geometry); o.material.normalMap = null; } });
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(url + ' ' + res.status);
+  const gltf = await gltfLoader.parseAsync(await res.arrayBuffer(), '');
+  gltf.scene.traverse(o => { if (o.isMesh) o.material.normalMap = null; });
   return gltf;
-}
-
-// Meshy's low-poly remeshes shade as flat facets: rebuild the normals smooth, averaging every face that
-// meets at a point (across UV seams too), but keep real edges harder than `crease` degrees sharp
-export function smoothNormals(g, crease = 55) {
-  const p = g.attributes.position, nrm = g.attributes.normal;
-  if (!nrm) return;
-  const idx = g.index, tris = idx ? idx.count / 3 : p.count / 3, vi = k => idx ? idx.getX(k) : k;
-  const fn = new Float32Array(tris * 3), groups = new Map(), key = new Array(p.count);
-  const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
-  for (let i = 0; i < p.count; i++) key[i] = `${Math.round(p.getX(i) * 1e4)},${Math.round(p.getY(i) * 1e4)},${Math.round(p.getZ(i) * 1e4)}`;
-  for (let t = 0; t < tris; t++) {
-    a.fromBufferAttribute(p, vi(3 * t)); b.fromBufferAttribute(p, vi(3 * t + 1)); c.fromBufferAttribute(p, vi(3 * t + 2));
-    c.sub(b); a.sub(b); c.cross(a);   // area-weighted face normal
-    fn.set([c.x, c.y, c.z], t * 3);
-    for (let j = 0; j < 3; j++) { const k = key[vi(3 * t + j)]; (groups.get(k) || groups.set(k, []).get(k)).push(t); }
-  }
-  const cosC = Math.cos(crease * Math.PI / 180), ref = new THREE.Vector3(), sum = new THREE.Vector3(), f = new THREE.Vector3();
-  for (let i = 0; i < p.count; i++) {
-    ref.fromBufferAttribute(nrm, i).normalize();
-    sum.set(0, 0, 0);
-    for (const t of groups.get(key[i])) {
-      f.fromArray(fn, t * 3);
-      const len = f.length();
-      if (len > 0 && f.dot(ref) / len > cosC) sum.add(f);
-    }
-    if (sum.lengthSq() > 0) { sum.normalize(); nrm.setXYZ(i, sum.x, sum.y, sum.z); }
-  }
-  nrm.needsUpdate = true;
 }
 
 // ---------- canvas textures ----------

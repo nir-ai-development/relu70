@@ -57,7 +57,7 @@ export function loadModels(names) {
 async function loadOne(name, spec) {
   {
     let gltf;
-    try { gltf = await loadGltf(`assets/${name}.json`); } catch { return; }   // not made yet: callers fall back
+    try { gltf = await loadGltf(`assets/${name}.glb`); } catch { return; }   // not made yet: callers fall back
     const root = new THREE.Group();
     const m = gltf.scene;
     if (spec.rot) m.rotation.y = spec.rot;

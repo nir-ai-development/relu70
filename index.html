@@ -36,6 +36,8 @@ body { background: var(--night); color: var(--ink); font-family: var(--font-body
   padding-block: max(16px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-bottom, 0px));
   overflow-y: auto; overflow-x: hidden; }
 .screen.dim { background: rgba(22, 33, 58, .55); backdrop-filter: blur(3px); }
+/* a card taller than the screen (phone held sideways) starts at the top and scrolls, instead of being cut off at both ends */
+.screen > * { margin-block: auto; }
 
 /* airmail card */
 .card { position: relative; width: min(560px, 100%); background: var(--paper); border-radius: 6px; padding: 26px 24px 22px;
@@ -154,6 +156,17 @@ p { margin: 0; line-height: 1.55; }
   .progress .labels { font-size: 12px; }
   .chip { font-size: 16px; padding: 5px 11px; gap: 6px; }
   .hearts { letter-spacing: 1px; }
+}
+/* phones held sideways: shrink the instruction card so the start button fits without scrolling */
+@media (max-height: 500px) {
+  .card { padding: 14px 20px 12px; }
+  #screen-howto h2 { font-size: 24px !important; }
+  #screen-howto p { line-height: 1.35; font-size: 14px; }
+  .howto { margin: 8px 0 10px; gap: 8px; }
+  .howto div { padding: 6px; font-size: 13px; }
+  .howto b { font-size: 22px; }
+  .howto small { margin-top: 2px; }
+  #screen-howto .btn { padding-block: 8px; }
 }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
 

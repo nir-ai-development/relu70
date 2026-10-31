@@ -79,7 +79,7 @@ const LEVELS = [
     hud: { labels: ['שאלה ראשונה', 'סוף הבוחן 📝'], icon: '✓', hearts: false },
     result: { label: 'Leyada · 1969', title: 'תלמיד מצטיין!', text: 'המורה כתב "מצוין" על הבוחן.', mark: ['LEYADA', '1969'] } },
   { yr: '1976', name: 'הקצין', img: 'era4_soldier', ready: true, make: app => new Level4(app),
-    load: { models: ['jeep', 'armyTent', 'tree'], figures: ['officer', 'soldier'] },
+    load: { models: ['jeep', 'tree'], figures: ['officer', 'soldier'] },
     story: {
       date: 'בסיס טירונים · 1976',
       title: 'הקצין',
