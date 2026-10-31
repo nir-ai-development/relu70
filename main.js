@@ -472,6 +472,7 @@ let last = performance.now();
 renderer.setAnimationLoop(now => {
   const dt = Math.min(0.05, (now - last) / 1000); last = now;
   const v = app.view;
+  if (v === app.title && !$('screen-title').hidden) return;   // the title picture covers the 3D street: save the phone's battery
   v.update(dt);
   if (!v.scene.environment) v.scene.environment = env;
   renderPass.scene = v.scene; renderPass.camera = v.camera;

@@ -58,8 +58,35 @@ p { margin: 0; line-height: 1.55; }
 .row { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; align-items: center; }
 
 /* title */
-#screen-title { place-items: end center; }
-.title-block { text-align: center; color: #fff; display: grid; gap: 14px; justify-items: center; margin-bottom: 4vh; }
+#screen-title { place-items: end center; background: #d9a46c; }
+/* the title picture: Relu's life as one road. A tall poster, so on a wide screen it sits in the middle over a
+   blurred copy of itself; on a phone it fills the screen. The dark fade at the bottom keeps the title readable. */
+#screen-title::before, #screen-title::after { content: ""; position: absolute; inset: 0; pointer-events: none; }
+#screen-title::before { background: url(assets/title_road.jpg) center / cover; filter: blur(22px) brightness(.8); transform: scale(1.15); }
+#screen-title::after { background: linear-gradient(to top, rgba(30, 20, 12, .82), rgba(30, 20, 12, .35) 30%, transparent 48%),
+  url(assets/title_road.jpg) center top / contain no-repeat; }
+/* squarish screens (tablets, a narrow desktop window): a smaller picture at the top, the title under it */
+@media (min-aspect-ratio: 3/4) and (max-aspect-ratio: 5/4) {
+  #screen-title::after { background-size: auto, auto 78%; background-position: 0 0, center top; }
+  #screen-title .title-block { gap: 8px; margin-bottom: 2vh; }
+  #screen-title .title-block h1 { font-size: clamp(36px, 8vh, 72px); }
+}
+/* wide screens: the picture stands on the right, the title beside it on the left */
+@media (min-aspect-ratio: 5/4) {
+  #screen-title { place-items: center start; }
+  #screen-title::after { background-position: 0 0, 82% top; }
+  #screen-title .title-block { width: min(46vw, 560px); margin: 0 0 0 3vw; }
+  #screen-title .title-block h1 { font-size: clamp(40px, min(7vw, 13vh), 96px); }
+}
+/* phones: fill the screen (the picture has extra cobbles at the bottom, so the toddler stands above the title) */
+@media (max-aspect-ratio: 3/4) {
+  #screen-title::after { top: -4%; background-size: auto, cover; }
+  .title-block { gap: 8px; margin-bottom: 2.5vh; }
+  .title-block .eyebrow { display: none; }
+  .title-block h1 { font-size: clamp(40px, 12vw, 64px); }
+  .title-block p { display: none; }
+}
+.title-block { position: relative; z-index: 1; text-align: center; color: #fff; display: grid; gap: 14px; justify-items: center; margin-bottom: 4vh; }
 .title-block .eyebrow { font-family: var(--font-doc); letter-spacing: .3em; font-size: 13px; opacity: .85; direction: ltr; }
 .title-block h1 { font-size: clamp(48px, min(11vw, 13vh), 104px); color: #fff; text-shadow: 0 4px 0 var(--mail-red), 0 10px 30px rgba(0,0,0,.4); }
 .title-block p { font-size: 18px; text-shadow: 0 2px 8px rgba(0,0,0,.5); }
@@ -296,23 +323,23 @@ p { margin: 0; line-height: 1.55; }
 <div id="loading" dir="rtl" role="status"><span id="loading-text">טוען את העולם…</span><div class="bar wait"><i id="loading-fill"></i></div></div>
 <div id="fade"></div>
 
-<meta name="build" content="1031133725">
+<meta name="build" content="1031135347">
 <script type="importmap">
 {
  "imports": {
-  "./character.js": "./character.js?v=1031133725",
-  "./engine.js": "./engine.js?v=1031133725",
-  "./level1.js": "./level1.js?v=1031133725",
-  "./level2.js": "./level2.js?v=1031133725",
-  "./level3.js": "./level3.js?v=1031133725",
-  "./level4.js": "./level4.js?v=1031133725",
-  "./level5.js": "./level5.js?v=1031133725",
-  "./level6.js": "./level6.js?v=1031133725",
-  "./level7.js": "./level7.js?v=1031133725",
-  "./level8.js": "./level8.js?v=1031133725",
-  "./main.js": "./main.js?v=1031133725",
-  "./models.js": "./models.js?v=1031133725",
-  "./props1.js": "./props1.js?v=1031133725"
+  "./character.js": "./character.js?v=1031135347",
+  "./engine.js": "./engine.js?v=1031135347",
+  "./level1.js": "./level1.js?v=1031135347",
+  "./level2.js": "./level2.js?v=1031135347",
+  "./level3.js": "./level3.js?v=1031135347",
+  "./level4.js": "./level4.js?v=1031135347",
+  "./level5.js": "./level5.js?v=1031135347",
+  "./level6.js": "./level6.js?v=1031135347",
+  "./level7.js": "./level7.js?v=1031135347",
+  "./level8.js": "./level8.js?v=1031135347",
+  "./main.js": "./main.js?v=1031135347",
+  "./models.js": "./models.js?v=1031135347",
+  "./props1.js": "./props1.js?v=1031135347"
  }
 }
 </script>
