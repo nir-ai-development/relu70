@@ -444,10 +444,13 @@ export function makePlane() {
     // the model's nose already points to -x, matching the take-off direction
     g.add(m);
     g.userData.props = [];
-    // the boarding door, level with the top of the stairs (the stairs stand 8.5 m ahead of the plane's middle)
-    const door = makePlaneDoor(); door.position.x = -8.5; g.add(door);
-    g.userData.door = door.userData.leaf;
-    g.scale.setScalar(PLANE_SCALE);   // big enough for Mom and Dad to walk in upright
+    const d = fitDoor(g, m);
+    if (d) {
+      // big enough for Mom and Dad to walk in upright; doorAt is the sill's centre in the scaled plane
+      const k = DOOR_H / d.h;
+      g.scale.setScalar(k);
+      g.userData.doorAt = d.sill.multiplyScalar(k);
+    }
     return g;
   }
   const g = new THREE.Group();
@@ -485,15 +488,14 @@ export function makePlane() {
   return outer;
 }
 
-// the boarding door, lying flush on the fuselage. The plane's side here is close to a circle around the
-// x axis (centre y 4.3, z -0.31, radius 2.26 in the door group's frame), so every layer follows that curve:
-// a trim outline, the dark cabin behind the opening, and a door leaf hinged on the tail side that swings
-// out flat against the plane (leaf.rotation.y: 0 shut, DOOR_OPEN wide open)
-function curvedPanel(w, y0, y1, lift, x0 = -w / 2) {
+// the boarding door, lying flush on the fuselage: every layer follows the side's measured profile
+// (surf(y) = the skin's z at height y): a trim outline, the dark cabin behind the opening, and a door leaf
+// hinged on the tail side that swings out flat against the plane (leaf.rotation.y: 0 shut, DOOR_OPEN wide open)
+function curvedPanel(w, y0, y1, lift, surf, x0 = -w / 2) {
   const nx = 4, ny = 14, pos = [], idx = [];
   for (let j = 0; j <= ny; j++) for (let i = 0; i <= nx; i++) {
-    const y = y0 + (y1 - y0) * j / ny, dy = y - 4.3;
-    pos.push(x0 + w * i / nx, y, -0.31 + Math.sqrt(2.26 * 2.26 - dy * dy) + lift);
+    const y = y0 + (y1 - y0) * j / ny;
+    pos.push(x0 + w * i / nx, y, surf(y) + lift);
   }
   for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
     const a = j * (nx + 1) + i, b = a + 1, c = a + nx + 1, d = c + 1;
@@ -503,28 +505,53 @@ function curvedPanel(w, y0, y1, lift, x0 = -w / 2) {
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx); g.computeVertexNormals();
   return g;
 }
-function makePlaneDoor() {
-  const g = new THREE.Group();
-  const W = 1.0, y0 = 2.55, y1 = 4.4;
+function makePlaneDoor(W, y0, y1, surf) {
+  const g = new THREE.Group(), H = y1 - y0, t = H / 30;   // t: trim and gap widths, in step with the door's size
   const flat = o => { o.castShadow = false; return o; };
-  g.add(flat(mesh(curvedPanel(W + 0.12, y0 - 0.06, y1 + 0.06, 0.012), paint(0x8e949c, { metalness: 0.3, roughness: 0.5 }))));
-  g.add(flat(mesh(curvedPanel(W, y0, y1, 0.02), paint(0x15120e, { roughness: 1 }))));
+  g.add(flat(mesh(curvedPanel(W + 2 * t, y0 - t, y1 + t, t * 0.2, surf), paint(0x8e949c, { metalness: 0.3, roughness: 0.5 }))));
+  g.add(flat(mesh(curvedPanel(W, y0, y1, t * 0.35, surf), paint(0x15120e, { roughness: 1 }))));
   const hinge = new THREE.Group(); hinge.position.x = W / 2; g.add(hinge);
-  const leaf = mesh(curvedPanel(W, y0, y1, 0.03, -W), paint(0xe9ecef, { metalness: 0.35, roughness: 0.4, side: THREE.DoubleSide }));
+  const leaf = mesh(curvedPanel(W, y0, y1, t * 0.5, surf, -W), paint(0xeef0f2, { metalness: 0.35, roughness: 0.4, side: THREE.DoubleSide }));
   hinge.add(flat(leaf));
-  // a porthole and a handle on the leaf, sitting on the curve
-  const surf = (y, lift) => -0.31 + Math.sqrt(2.26 * 2.26 - (y - 4.3) ** 2) + lift;
-  const glass = mesh(new THREE.CircleGeometry(0.14, 24), paint(0x23324d, { roughness: 0.1, metalness: 0.3 }), -W / 2, 3.85, surf(3.85, 0.04));
-  const rim = mesh(new THREE.RingGeometry(0.14, 0.18, 24), paint(0xb9bec6, { metalness: 0.4, roughness: 0.4 }), -W / 2, 3.85, surf(3.85, 0.039));
-  hinge.add(flat(glass), flat(rim));
-  hinge.add(flat(mesh(new THREE.BoxGeometry(0.2, 0.05, 0.05), 0x6b7078, -W + 0.17, 3.3, surf(3.3, 0.06))));
+  // a porthole and a handle on the leaf
+  const gy = y0 + H * 0.7, hy = y0 + H * 0.42, r = W * 0.15;
+  hinge.add(flat(mesh(new THREE.CircleGeometry(r, 24), paint(0x23324d, { roughness: 0.1, metalness: 0.3 }), -W / 2, gy, surf(gy) + t * 0.7)));
+  hinge.add(flat(mesh(new THREE.RingGeometry(r, r * 1.3, 24), paint(0xb9bec6, { metalness: 0.4, roughness: 0.4 }), -W / 2, gy, surf(gy) + t * 0.65)));
+  hinge.add(flat(mesh(new THREE.BoxGeometry(W * 0.2, t * 0.8, t), 0x6b7078, -W * 0.83, hy, surf(hy) + t)));
   g.userData.leaf = hinge;
   return g;
 }
+
+// where the model's painted passenger door is: its centre as a fraction of the length from the nose, and its
+// bottom and top as fractions of the fuselage's height there. The plane is scaled so the doorway is DOOR_H tall.
+const DOOR_ALONG = 0.218, DOOR_LOW = 0.32, DOOR_HIGH = 0.86, DOOR_H = 3.1;
+// measure the fuselage at the door and put a working door over the painted one; returns the door sill's
+// centre on the skin (in the plane's own frame, before g's scale) and the door's height
+function fitDoor(g, m) {
+  m.updateMatrixWorld(true);
+  const box = new THREE.Box3().setFromObject(m), V = THREE.Vector3, rc = new THREE.Raycaster();
+  const hit = (o, d) => { rc.set(o, d); return rc.intersectObject(m, true)[0]?.point; };
+  const x = box.min.x + DOOR_ALONG * (box.max.x - box.min.x);
+  const top = hit(new V(x, box.max.y + 5, 0), new V(0, -1, 0)), bot = hit(new V(x, box.min.y - 5, 0), new V(0, 1, 0));
+  if (!top || !bot) return null;
+  const h = top.y - bot.y, y0 = bot.y + DOOR_LOW * h, y1 = bot.y + DOOR_HIGH * h;
+  // the skin's z at a run of heights across the door, from rays fired at the plane's side
+  const rows = [];
+  for (let i = 0; i <= 20; i++) {
+    const y = y0 + (y1 - y0) * (i / 20 * 1.2 - 0.1), p = hit(new V(x, y, box.max.z + 5), new V(0, 0, -1));
+    if (p) rows.push([y, p.z]);
+  }
+  if (!rows.length) return null;
+  const surf = y => {
+    if (y <= rows[0][0]) return rows[0][1];
+    for (let i = 1; i < rows.length; i++) if (y <= rows[i][0]) { const [ya, za] = rows[i - 1], [yb, zb] = rows[i]; return za + (zb - za) * (y - ya) / (yb - ya); }
+    return rows[rows.length - 1][1];
+  };
+  const door = makePlaneDoor(0.62 * (y1 - y0), y0, y1, surf); door.position.x = x; g.add(door);
+  g.userData.door = door.userData.leaf;
+  return { sill: new V(x, y0, surf(y0)), h: y1 - y0 };
+}
 export const DOOR_OPEN = 2.85;
-export const PLANE_SCALE = 1.65;
-// the stairs grow with the plane, so their platform meets the door sill (2.55 up the unscaled plane)
-export const STAIRS_SCALE = 2.55 * PLANE_SCALE / 2.5;
 
 // a 1950s boarding-stair truck: the treads keep the path the climb animation follows
 // (top step at y 2.4, z 0.2; each step 0.27 down and 0.4 forward; foot at z ≈ 3.9)

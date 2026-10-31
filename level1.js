@@ -3,7 +3,7 @@ import { makeBabyRelu, makeAdult, makeFigure, makeSuitcase } from './character.j
 import {
   buildRoom, makeOpenCase, makeTeddy, makeBottle, makeBlanket, makeCertificate, makePhotoFrame, makePiano, makeArmchair, makeGoose,
   makeBarrel, makeCart, makePuddle, makeHouse, makeTree, makeLamp, makeTower, makeSign, makeStamp, makeLandscape,
-  makePlane, DOOR_OPEN, PLANE_SCALE, STAIRS_SCALE, makeStairs, makeControlTower, makeTerminal, makeLuggageCart, makeFuelTruck, cobbleTex, slabTex, concreteTex,
+  makePlane, DOOR_OPEN, makeStairs, makeControlTower, makeTerminal, makeLuggageCart, makeFuelTruck, cobbleTex, slabTex, concreteTex,
 } from './props1.js';
 
 // Level 1 · Piatra Neamț, July 1958
@@ -20,9 +20,6 @@ function disposeTree(obj) {
 
 // =====================================================================
 const SUN_DIR = new THREE.Vector3(4, 10, 6);
-const PLANE_X = 8.5 * PLANE_SCALE;   // puts the door (8.5 m ahead of the plane's middle) at x = 0
-// the scaled stairs: top platform height, and how far out the foot and the top step reach
-const STAIR_TOP = 2.5 * STAIRS_SCALE, STAIR_FOOT = 3.9 * STAIRS_SCALE - 0.1, STAIR_HEAD = 0.2 * STAIRS_SCALE - 0.1;
 
 export class Level1 {
   constructor(app) {
@@ -393,11 +390,18 @@ export class Level1 {
     const tarmac = mesh(new THREE.PlaneGeometry(56, 32), paint(0xffffff, { map: concreteTex(), roughness: 0.9 }), 0, 0.05, 0); tarmac.rotation.x = -Math.PI / 2; tarmac.castShadow = false; A.add(tarmac);
     for (let i = -5; i <= 5; i++) { const l = mesh(new THREE.PlaneGeometry(2.2, 0.35), paint(0xf4e9b0, { roughness: 0.7 }), i * 5, 0.07, 6); l.rotation.x = -Math.PI / 2; l.castShadow = false; A.add(l); }
     // the stairs meet the front door; the wing stays behind them, out of the camera's way
-    const plane = this.plane = makePlane(); plane.position.set(PLANE_X, 0, -4.75); A.add(plane);   // the door sill meets the end of the stair platform
-    const stairs = this.stairs = makeStairs(); stairs.scale.setScalar(STAIRS_SCALE); stairs.position.set(0, 0, -0.1); A.add(stairs);
+    // the stairs grow to the height of the plane's door sill (their top, foot and first step scale with them);
+    // the plane stands with its door at x = 0 and the sill against the end of the stair platform
+    // (the hand-built fallback plane has no door: a rough fit)
+    const plane = this.plane = makePlane(); A.add(plane);
+    const D = plane.userData.doorAt || new THREE.Vector3(-8.5, 2.5, 1.2);
+    const k = D.y / 2.5, S = this.stair = { k, top: D.y, foot: 3.9 * k - 0.1, head: 0.2 * k - 0.1, end: -0.1 - 1.7 * k };
+    this.planeX = -D.x;
+    plane.position.set(this.planeX, 0, S.end - D.z + 0.05);
+    const stairs = this.stairs = makeStairs(); stairs.scale.setScalar(k); stairs.position.set(0, 0, -0.1); A.add(stairs);
     const small = o => { o.scale.setScalar(0.8); return o; };   // the hand-built fallbacks are oversized
-    const mom = makeFigure('mom', 2.9) || small(makeAdult({ coat: 0x7d4f6e, dress: true })); mom.position.set(-0.45, STAIR_TOP, -0.7); mom.rotation.y = 0.15;
-    const dad = makeFigure('dad', 3.1) || small(makeAdult({ coat: 0x3d4250, hat: true })); dad.position.set(0.5, STAIR_TOP, -0.8); dad.rotation.y = -0.15;
+    const mom = makeFigure('mom', 2.9) || small(makeAdult({ coat: 0x7d4f6e, dress: true })); mom.position.set(-0.45, S.top, S.end + 0.75 * k); mom.rotation.y = 0.15;
+    const dad = makeFigure('dad', 3.1) || small(makeAdult({ coat: 0x3d4250, hat: true })); dad.position.set(0.5, S.top, S.end + 0.7 * k); dad.rotation.y = -0.15;
     for (const p of [mom, dad]) { p.userData.baseScale = p.scale.x; p.userData.mode = 'idle'; }
     A.add(mom, dad);
     this.parents = [mom, dad];
@@ -419,7 +423,7 @@ export class Level1 {
     A.position.z += dz;
     for (const p of this.plane.userData.props) p.rotation.x += dt * (E.stage === 'takeoff' ? 40 : 12);
     // stairs foot is at A.z + 3.9; stop the world so the baby stops just in front of it
-    const remaining = -(A.position.z + STAIR_FOOT) - 0.5;
+    const S = this.stair, remaining = -(A.position.z + S.foot) - 0.5;
     // Mom and Dad wait at the door and wave to Relu now and then (one wave each, out of step), not nonstop
     this.parents.forEach((p, i) => {
       if (E.stage !== 'approach') { p.userData.animate(this.t, p.userData.mode); return; }
@@ -440,13 +444,13 @@ export class Level1 {
         this.app.hud({ progress: 1 });
         this.tl.add(0, 2.4, p => {
           // climb the 9 steps up to the door
-          const z = A.position.z + STAIR_FOOT - p * (STAIR_FOOT - STAIR_HEAD);
-          b.position.set(0, p * STAIR_TOP, z);
+          const z = A.position.z + S.foot - p * (S.foot - S.head);
+          b.position.set(0, p * S.top, z);
           b.rotation.y = Math.PI;
         }, () => { E.stage = 'done'; });
         // the family walks in through the door together (the dark cabin hides them as they go in), and it shuts behind them
-        // (Relu lives in the world group, Mom and Dad in the airport's: both end up 3.3 m inside the door)
-        const inside = [b, ...this.parents].map(o => ({ o, z: o.position.z, to: (o === b ? A.position.z : 0) - 3.3 }));
+        // (Relu lives in the world group, Mom and Dad in the airport's: all end up 1.6 m inside the door)
+        const inside = [b, ...this.parents].map(o => ({ o, z: o.position.z, to: (o === b ? A.position.z : 0) + S.end - 1.6 }));
         this.tl.add(2.5, 0.01, null, () => this.parents.forEach(p => { p.userData.mode = 'walk'; }));
         this.tl.add(2.6, 1.1, p => { for (const { o, z, to } of inside) { o.position.z = z + (to - z) * ease.inOut(p); o.rotation.y = Math.PI; } },
           () => inside.forEach(({ o }) => { o.visible = false; }));
@@ -459,7 +463,7 @@ export class Level1 {
         this.tl.add(5.2, 5.2, p => {
           E.stage = 'takeoff';
           const P = this.plane;
-          P.position.x = PLANE_X - p * p * 110;                               // gathering speed down the runway
+          P.position.x = this.planeX - p * p * 110;                               // gathering speed down the runway
           const lift = Math.max(0, (p - 0.5) / 0.5);
           P.position.y = lift * lift * 30;                                     // wheels leave the ground halfway
           P.rotation.z = -0.2 * smooth(0.42, 0.6, p) + 0.08 * smooth(0.8, 1, p);   // nose up at rotation, then settle into the climb
