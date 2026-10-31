@@ -307,7 +307,7 @@ export class Level2 {
     for (const p of this.pops) {
       p.life -= dt;
       g.globalAlpha = Math.max(0, Math.min(1, p.life * 2));
-      g.fillStyle = p.col; g.font = 'bold 20px "Secular One", sans-serif'; g.textAlign = 'center';
+      g.fillStyle = p.col; g.font = 'bold 20px "Secular One", sans-serif'; g.textAlign = 'center'; g.direction = 'rtl';   // Hebrew: the "!" goes on the left
       g.fillText(p.text, p.lane * lw + lw / 2, hitY - 34 - (0.7 - p.life) * 40);
       g.globalAlpha = 1;
     }
@@ -315,7 +315,7 @@ export class Level2 {
     // count-in
     if (this.songT < 0) {
       const n = Math.ceil(-this.songT / BEAT);
-      g.fillStyle = '#fff'; g.font = 'bold 64px "Secular One", sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.fillStyle = '#fff'; g.font = 'bold 64px "Secular One", sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.direction = 'rtl';
       g.fillText(n > COUNT_IN - 1 ? 'מוכנים?' : String(n), W / 2, hitY / 2);
     }
   }

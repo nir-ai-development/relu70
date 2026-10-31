@@ -142,7 +142,7 @@ export class Level5 {
     el.innerHTML = TOOLS.map(t => `<button style="background:${t.col}"><b>${t.icon}</b>${t.he}</button>`).join('');
     document.body.appendChild(el);
     [...el.children].forEach((b, i) => b.addEventListener('click', () => { sound.unlock(); this.treat(i); }));
-    const pop = this.pop = document.createElement('div'); pop.id = 'clinic-pop'; document.body.appendChild(pop);
+    const pop = this.pop = document.createElement('div'); pop.id = 'clinic-pop'; pop.dir = 'rtl'; document.body.appendChild(pop);
   }
   layoutOverlay() {}
   onKey(code) {

@@ -83,7 +83,7 @@ export class Level6 {
       const st = document.createElement('style'); st.id = 'memory-style';
       st.textContent = `
         #memory{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(12px + env(safe-area-inset-bottom));width:min(94vw,520px);z-index:5;
-          display:grid;grid-template-columns:repeat(4,1fr);gap:8px;perspective:600px}
+          display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;perspective:600px}
         #memory .card{aspect-ratio:3/3.4;position:relative;transform-style:preserve-3d;transition:transform .35s;cursor:pointer;touch-action:manipulation}
         #memory .card.open,#memory .card.done{transform:rotateY(180deg)}
         #memory .card > div{position:absolute;inset:0;border-radius:12px;backface-visibility:hidden;display:flex;flex-direction:column;align-items:center;justify-content:center;
@@ -91,9 +91,9 @@ export class Level6 {
         #memory .back{background:repeating-linear-gradient(45deg,#c8384a 0 8px,#d9485a 8px 16px);border:3px solid #fff4ea}
         #memory .back::after{content:"R ♥ A";font:16px "Secular One",sans-serif;color:#fff4ea;letter-spacing:1px}
         #memory .face{background:#fff8ef;transform:rotateY(180deg);font:clamp(28px,8vw,40px) serif}
-        #memory .face small{font:clamp(11px,3vw,14px) "Secular One",sans-serif;color:#7a3a3a;margin-top:2px}
+        #memory .face small{font:clamp(11px,3vw,14px) "Secular One",sans-serif;color:#7a3a3a;margin-top:2px;max-width:100%;padding:0 3px;text-align:center;overflow-wrap:anywhere}
         #memory .card.done .face{background:#ffe6a8}
-        @media (orientation:landscape) and (max-height:520px){#memory{width:min(60vw,440px);grid-template-columns:repeat(6,1fr)}}`;
+        @media (orientation:landscape) and (max-height:520px){#memory{width:min(60vw,440px);grid-template-columns:repeat(6,minmax(0,1fr))}}`;
       document.head.appendChild(st);
     }
     const el = this.el = document.createElement('div'); el.id = 'memory';
@@ -106,7 +106,7 @@ export class Level6 {
 
   startRun() {
     this.phase = 'run';
-    this.ending = false;
+    this.ending = false; this.close = 0; this.resize(this.aspect);
     this.tl = new Timeline();
     const deck = PAIRS.flatMap((p, k) => [k, k]);
     for (let i = deck.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [deck[i], deck[j]] = [deck[j], deck[i]]; }
@@ -158,6 +158,8 @@ export class Level6 {
     this.phase = 'done'; this.ending = true;
     this.tl.add(0.6, 0.01, null, () => { this.el.style.visibility = 'hidden'; sound.fanfare(); this.app.toast('אלין ורלו 💍'); });
     this.tl.add(0.8, 2.4, p => { if (p * 10 % 1 < 0.1) this.burst(2); });
+    // the cards are gone: move in close on the two of them dancing
+    this.tl.add(0.5, 1.6, p => { this.close = p * p * (3 - 2 * p); this.resize(this.aspect); });
     this.tl.add(4.2, 0.01, null, () => this.app.levelComplete(this.result()));
   }
 
@@ -171,11 +173,12 @@ export class Level6 {
     const c = this.camera;
     c.aspect = aspect;
     c.fov = aspect < 1 ? 56 : 40;
-    c.position.set(...(aspect < 1 ? [0, 4.4, 12.5] : [0, 3.6, 10]));
-    c.lookAt(0, aspect < 1 ? 2.8 : 2.4, -2);
+    const k = this.close || 0, mix = (a, b) => a + (b - a) * k;
+    c.position.set(0, mix(aspect < 1 ? 4.4 : 3.6, 2.7), mix(aspect < 1 ? 12.5 : 10, aspect < 1 ? 5.4 : 5.8));
+    c.lookAt(0, mix(aspect < 1 ? 2.8 : 2.4, 2.1), mix(-2, -1.6));   // (heads below the toast)
     const H = 1000, Wd = H * aspect;
-    // the cards cover the lower part of the screen; lift the couple above them
-    c.setViewOffset(Wd, H, 0, H * (aspect < 1 ? 0.3 : 0.2), Wd, H);
+    // the cards cover the lower part of the screen; lift the couple above them (until the close-up at the end)
+    c.setViewOffset(Wd, H, 0, mix(H * (aspect < 1 ? 0.3 : 0.2), H * 0.05), Wd, H);
     c.updateProjectionMatrix();
   }
 

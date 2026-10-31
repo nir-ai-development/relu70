@@ -143,6 +143,7 @@ export class Level8 {
         #party-card{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%) scale(.9);z-index:6;width:min(88vw,460px);padding:26px 22px;border-radius:18px;
           background:#fffaf0;box-shadow:0 20px 60px rgba(0,0,0,.45);text-align:center;direction:rtl;opacity:0;transition:all .6s;pointer-events:none}
         #party-card.show{opacity:1;transform:translate(-50%,-50%) scale(1)}
+        #party-hint,#party-blow,#party-card{direction:rtl}
         #party-card h2{font:clamp(26px,7vw,38px) "Secular One",sans-serif;margin:0 0 8px;color:#b8322f}
         #party-card p{font:clamp(16px,4.2vw,19px) "Varela Round",sans-serif;margin:6px 0;color:#333;line-height:1.5}`;
       document.head.appendChild(st);

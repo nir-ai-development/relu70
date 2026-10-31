@@ -6,7 +6,7 @@ import { model } from './models.js';
 // Dad stands in the water; one by one the four kids leap off the edge. Swipe (or tap left/right) to move Dad
 // under the splash target and catch each child. Every catch is a cheer; misses just splash. Nobody fails.
 
-const LANES = [-3, 0, 3];
+const LANES = [-2.6, 0, 2.6];   // (narrow enough that Dad stays on a portrait phone's screen)
 const JUMPS = 16;
 const FLIGHT = 1.5;          // seconds in the air (shorter as the game goes on)
 // the four children: [figure, height] — Karin and Idan, Tal and little Nir
@@ -45,7 +45,20 @@ function buildPool() {
   for (const x of [-1.5, 1.5]) for (let z = -3.6; z <= 3.6; z += 0.45) basin.add(mesh(new THREE.SphereGeometry(0.11, 8, 6), paint(z * 10 % 2 ? 0xe23c3c : 0xffffff), x, -0.3, z));
   // loungers and trees around the deck
   for (const [x, z, r] of [[-9.5, -3, 0.4], [-9.5, 1.5, 0.2], [9.5, -2, -0.4]]) { const l = model('lounger'); if (l) { l.position.set(x, 0, z); l.rotation.y = r + Math.PI / 2 * Math.sign(x); g.add(l); } }
-  for (const [x, z] of [[-12, -9], [12, -9], [-15, 2], [15, 3]]) { const t = model('tree'); if (t) { t.position.set(x, 0, z); g.add(t); } }
+  for (const [x, z, s] of [[-12, -9, 1], [12, -9, 1], [-15, 2, 1], [15, 3, 1], [-7, -12.5, 1.25], [6.5, -13, 1.35], [-1.5, -15, 1.15]]) {
+    const t = model('tree'); if (t) { t.position.set(x, 0, z); t.scale.multiplyScalar(s); g.add(t); }
+  }
+  // the garden behind the pool: a clipped hedge, the family's house, and sun umbrellas by the loungers
+  const hedge = paint(0x4f8a3a, { roughness: 0.95 });
+  g.add(mesh(new THREE.BoxGeometry(40, 1.8, 1.4), hedge, 0, 0.9, -13.5));
+  const house = model('houseA'); if (house) { house.position.set(3, 0, -21); g.add(house); }
+  const canvas = [paint(0xe2533e, { roughness: 0.8, side: THREE.DoubleSide }), paint(0xf4f0e6, { roughness: 0.8, side: THREE.DoubleSide })];
+  for (const [x, z, k] of [[-9.6, -0.8, 0], [9.6, 0.2, 1], [-4, -7, 1], [4.5, -7.5, 0]]) {
+    const u = new THREE.Group(); u.position.set(x, 0, z);
+    u.add(mesh(new THREE.CylinderGeometry(0.06, 0.06, 3.2, 8), 0xdddddd, 0, 1.6, 0));
+    u.add(mesh(new THREE.ConeGeometry(1.9, 0.7, 12, 1, true), canvas[k], 0, 3.2, 0));
+    g.add(u);
+  }
   // the diving edge the kids jump from: a bright springboard
   g.add(mesh(new THREE.BoxGeometry(LANES[2] - LANES[0] + 3, 0.5, 1.6), paint(0xf6f1e6), 0, 0.25, -D / 2 - 0.7 + 0.5));
   return g;
@@ -167,9 +180,10 @@ export class Level7 {
     this.aspect = aspect;
     const c = this.camera;
     c.aspect = aspect;
-    c.fov = aspect < 1 ? 66 : 48;
-    c.position.set(0, aspect < 1 ? 7.2 : 6.4, aspect < 1 ? 13.5 : 12);
-    c.lookAt(0, 0.6, -1.2);
+    c.fov = aspect < 1 ? 70 : 48;
+    // a phone: closer and lower, so the pool fills the screen and the garden shows behind the kids
+    c.position.set(0, aspect < 1 ? 6.2 : 6.4, aspect < 1 ? 11.5 : 12);
+    c.lookAt(0, aspect < 1 ? 1.4 : 0.6, aspect < 1 ? -2.5 : -1.2);
     c.updateProjectionMatrix();
   }
 

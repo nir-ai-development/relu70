@@ -278,8 +278,9 @@ export class Level3 {
     c.aspect = aspect;
     c.fov = aspect < 1 ? 64 : 46;
     // from the front corner by the board, looking at the class: Relu's face, the windows, the teacher
-    c.position.set(...(aspect < 1 ? [3.6, 3.4, -4.2] : [3.9, 3.0, -3.4]));
-    c.lookAt(aspect < 1 ? 0.9 : -0.3, 1.6, 1.2);
+    // (on a phone, high over the empty desk in front of Relu, so it doesn't fill the lower half)
+    c.position.set(...(aspect < 1 ? [3.4, 4.7, -3.1] : [3.9, 3.0, -3.4]));
+    c.lookAt(aspect < 1 ? 0.8 : -0.3, aspect < 1 ? 0.9 : 1.6, aspect < 1 ? 1.5 : 1.2);
     const H = 1000, Wd = H * aspect;
     // the chalkboard card covers the top and the buttons the bottom; keep the class between them
     c.setViewOffset(Wd, H, 0, H * (aspect < 1 ? 0.04 : 0.02), Wd, H);
@@ -298,7 +299,7 @@ export class Level3 {
     this.cheer = Math.max(0, this.cheer - dt);
     const done = this.phase === 'done';
     // (clip names are matched by substring, so these are specific: "sit" alone would also match "sit_cheer")
-    if (this.relu) this.relu.userData.animate(this.t, done ? 'sit_cheer' : this.cheer > 0 ? 'answering' : 'sit_idle_f');   // the upright sitting idle; the male one hunches over
+    if (this.relu) this.relu.userData.animate(this.t, done || this.cheer > 0 ? 'sit_cheer' : 'sit_idle_f');   // the upright sitting idle; the male one hunches over (and "answering" lifts him out of the seat)
     for (const g of [this.girl, this.girl2]) if (g) g.userData.animate(this.t + (g.userData.offset || 0), done ? 'sitting_clap' : 'chair_sit');
     if (this.teacher) this.teacher.userData.animate(this.t, done ? 'victory' : this.cheer > 0 ? 'agree' : 'talk');
   }
