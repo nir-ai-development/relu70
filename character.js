@@ -51,6 +51,7 @@ const FIGURES = {
   father: { url: 'assets/relu_father.glb', m: 1.78 },     // father of four, 1989
   girlKid: { url: 'assets/girl_kid.glb', m: 1.05 },
   boyKid: { url: 'assets/boy_kid.glb', m: 1.2 },
+  nir: { url: 'assets/nir_kid.glb', m: 1.3 },            // Nir, the youngest of the four
   saba: { url: 'assets/saba.glb', m: 1.75 },              // Saba Relu, 70
 };
 const figures = {}, pending = {};

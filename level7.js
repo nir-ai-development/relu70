@@ -10,7 +10,7 @@ const LANES = [-2.6, 0, 2.6];   // (narrow enough that Dad stays on a portrait p
 const JUMPS = 16;
 const FLIGHT = 1.5;          // seconds in the air (shorter as the game goes on)
 // the four children: [figure, height] — Karin and Idan, Tal and little Nir
-const KIDS = [['girlKid', 2.0, 'קארין'], ['boyKid', 2.3, 'עידן'], ['girlKid', 1.75, 'טל'], ['boyKid', 1.6, 'ניר']];
+const KIDS = [['girlKid', 2.0, 'קארין'], ['boyKid', 2.3, 'עידן'], ['girlKid', 1.75, 'טל'], ['nir', 1.6, 'ניר']];
 
 const waterTex = () => canvasTex(256, 256, (g, w, h) => {
   g.fillStyle = '#3fb6d8'; g.fillRect(0, 0, w, h);

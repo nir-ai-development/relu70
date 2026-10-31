@@ -133,7 +133,7 @@ const LEVELS = [
     hud: { labels: ['הפגישה הראשונה', 'ביחד 💍'], icon: '❤', hearts: false },
     result: { label: 'Jerusalem · 1980', title: 'רלו ואלין!', text: 'ומכאן הכול התחיל.', mark: ['RELU ♥ ALINE', '1980'] } },
   { yr: '1983–1990', name: 'אבא לארבעה', img: 'era7_dad', ready: true, make: app => new Level7(app),
-    load: { models: ['lounger', 'tree', 'houseA'], figures: ['father', 'girlKid', 'boyKid'] },
+    load: { models: ['lounger', 'tree', 'houseA'], figures: ['father', 'girlKid', 'boyKid', 'nir'] },
     story: {
       date: 'שנות ה-80',
       title: 'אבא לארבעה',
