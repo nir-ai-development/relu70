@@ -82,8 +82,8 @@ export function makeFigure(which, height) {
   // people without an idle clip wave rather than run on the spot
   const fallback = clip('idle') || clip('wave') || gltf.animations[0];
   let cur = null, lastT = null;
-  // someone with no idle clip stands still in the first frame of their walk instead
-  const still = !clip('idle') && clip('walk');
+  // someone with no idle clip stands still in the first frame of their wave (arms down) or walk instead
+  const still = !clip('idle') && (clip('wave') || clip('walk'));
   root.userData.animate = (t, mode) => {
     const dt = lastT === null ? 0 : Math.min(0.1, Math.max(0, t - lastT)); lastT = t;
     const stand = mode === 'idle' && still;
@@ -96,6 +96,7 @@ export function makeFigure(which, height) {
     if (c) { const a = mixer.clipAction(c); a.paused = stand; if (stand) a.time = 0; }
     mixer.update(dt);
   };
+  root.userData.clipLength = mode => (clip(mode) || fallback)?.duration || 1;
   root.userData.bone = name => { let b = null; m.traverse(o => { if (!b && o.isBone && o.name.endsWith(name)) b = o; }); return b; };
   return root;
 }

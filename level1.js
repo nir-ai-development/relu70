@@ -3,7 +3,7 @@ import { makeBabyRelu, makeAdult, makeFigure, makeSuitcase } from './character.j
 import {
   buildRoom, makeOpenCase, makeTeddy, makeBottle, makeBlanket, makeCertificate, makePhotoFrame, makePiano, makeArmchair, makeGoose,
   makeBarrel, makeCart, makePuddle, makeHouse, makeTree, makeLamp, makeTower, makeSign, makeStamp, makeLandscape,
-  makePlane, makeStairs, makeControlTower, makeTerminal, makeLuggageCart, makeFuelTruck, cobbleTex, slabTex, concreteTex,
+  makePlane, DOOR_OPEN, PLANE_SCALE, STAIRS_SCALE, makeStairs, makeControlTower, makeTerminal, makeLuggageCart, makeFuelTruck, cobbleTex, slabTex, concreteTex,
 } from './props1.js';
 
 // Level 1 · Piatra Neamț, July 1958
@@ -20,7 +20,9 @@ function disposeTree(obj) {
 
 // =====================================================================
 const SUN_DIR = new THREE.Vector3(4, 10, 6);
-const PLANE_X = 8.5;
+const PLANE_X = 8.5 * PLANE_SCALE;   // puts the door (8.5 m ahead of the plane's middle) at x = 0
+// the scaled stairs: top platform height, and how far out the foot and the top step reach
+const STAIR_TOP = 2.5 * STAIRS_SCALE, STAIR_FOOT = 3.9 * STAIRS_SCALE - 0.1, STAIR_HEAD = 0.2 * STAIRS_SCALE - 0.1;
 
 export class Level1 {
   constructor(app) {
@@ -277,12 +279,12 @@ export class Level1 {
   }
 
   move(dir) {
-    if (this.phase !== 'run' || this.ending || this.dead) return;
+    if (this.phase !== 'run' || this.ending?.locked || this.ending?.stage === 'climb' || this.dead) return;
     const nl = Math.max(0, Math.min(2, this.lane + dir));
     if (nl !== this.lane) { this.lane = nl; sound.tone(520 + dir * 60, 0.06, 'sine', 0.12); }
   }
   jump() {
-    if (this.phase !== 'run' || this.ending || this.dead) return;
+    if (this.phase !== 'run' || this.ending?.locked || this.dead) return;
     if (this.py <= 0.001) { this.vy = JUMP_V; sound.jump(); }
   }
 
@@ -309,7 +311,7 @@ export class Level1 {
     }
 
     // spawn rows until near the airport
-    if (!this.ending && this.dist < GOAL - 95) {
+    if (!this.ending && this.dist < GOAL - 112) {   // the last row is passed before the steering locks
       this.nextRow -= dz;
       if (this.nextRow <= 0) { this.spawnRow(-95); this.nextRow = 24 - (this.dist / GOAL) * 9; }
     }
@@ -324,7 +326,7 @@ export class Level1 {
     b.userData.shadow.position.y = 0.01 - b.position.y;
     b.userData.shadow.scale.setScalar(1 - Math.min(0.5, this.py * 0.3));
     this.invuln = Math.max(0, this.invuln - dt);
-    b.visible = this.invuln > 0 ? Math.floor(this.invuln * 12) % 2 === 0 : true;
+    if (!scripted) b.visible = this.invuln > 0 ? Math.floor(this.invuln * 12) % 2 === 0 : true;
 
     // entities
     for (const e of this.entities) {
@@ -391,18 +393,18 @@ export class Level1 {
     const tarmac = mesh(new THREE.PlaneGeometry(56, 32), paint(0xffffff, { map: concreteTex(), roughness: 0.9 }), 0, 0.05, 0); tarmac.rotation.x = -Math.PI / 2; tarmac.castShadow = false; A.add(tarmac);
     for (let i = -5; i <= 5; i++) { const l = mesh(new THREE.PlaneGeometry(2.2, 0.35), paint(0xf4e9b0, { roughness: 0.7 }), i * 5, 0.07, 6); l.rotation.x = -Math.PI / 2; l.castShadow = false; A.add(l); }
     // the stairs meet the front door; the wing stays behind them, out of the camera's way
-    const plane = this.plane = makePlane(); plane.position.set(PLANE_X, 0, -3.1); A.add(plane);
-    const stairs = this.stairs = makeStairs(); stairs.position.set(0, 0, -0.1); A.add(stairs);
+    const plane = this.plane = makePlane(); plane.position.set(PLANE_X, 0, -4.75); A.add(plane);   // the door sill meets the end of the stair platform
+    const stairs = this.stairs = makeStairs(); stairs.scale.setScalar(STAIRS_SCALE); stairs.position.set(0, 0, -0.1); A.add(stairs);
     const small = o => { o.scale.setScalar(0.8); return o; };   // the hand-built fallbacks are oversized
-    const mom = makeFigure('mom', 2.9) || small(makeAdult({ coat: 0x7d4f6e, dress: true })); mom.position.set(-0.4, 2.5, -0.75); mom.rotation.y = 0.15;
-    const dad = makeFigure('dad', 3.1) || small(makeAdult({ coat: 0x3d4250, hat: true })); dad.position.set(0.45, 2.5, -0.85); dad.rotation.y = -0.15;
-    for (const p of [mom, dad]) p.userData.baseScale = p.scale.x;
+    const mom = makeFigure('mom', 2.9) || small(makeAdult({ coat: 0x7d4f6e, dress: true })); mom.position.set(-0.45, STAIR_TOP, -0.7); mom.rotation.y = 0.15;
+    const dad = makeFigure('dad', 3.1) || small(makeAdult({ coat: 0x3d4250, hat: true })); dad.position.set(0.5, STAIR_TOP, -0.8); dad.rotation.y = -0.15;
+    for (const p of [mom, dad]) { p.userData.baseScale = p.scale.x; p.userData.mode = 'idle'; }
     A.add(mom, dad);
     this.parents = [mom, dad];
     const tower = makeControlTower(); tower.position.set(-25, 0, -10); tower.rotation.y = 0.6; A.add(tower);
     const terminal = makeTerminal(); if (terminal) { terminal.position.set(-17, 0, -17); terminal.rotation.y = 0.4; A.add(terminal); }
     const cart = makeLuggageCart(); if (cart) { cart.position.set(2.8, 0, 3.4); cart.rotation.y = -0.5; A.add(cart); }
-    const truck = makeFuelTruck(); if (truck) { truck.position.set(21, 0, -8); truck.rotation.y = -2.4; A.add(truck); }
+    const truck = makeFuelTruck(); if (truck) { truck.position.set(34, 0, -16); truck.rotation.y = -2.4; A.add(truck); }
     const sign = makeSign(['AEROPORT', 'BĂNEASA ✈'], '#1f4e9c'); sign.position.set(-6.5, 0, 9); sign.rotation.y = 0.5; A.add(sign);
     A.position.z = -this.world.position.z - (GOAL - this.dist) - 6;
     // clear the street beyond the tarmac's near edge so nothing stands in the take-off shot
@@ -416,33 +418,45 @@ export class Level1 {
     if (!A) return;
     A.position.z += dz;
     for (const p of this.plane.userData.props) p.rotation.x += dt * (E.stage === 'takeoff' ? 40 : 12);
-    for (const p of this.parents) p.userData.animate(this.t, 'wave');
     // stairs foot is at A.z + 3.9; stop the world so the baby stops just in front of it
-    const remaining = -(A.position.z + 3.9) - 0.5;
+    const remaining = -(A.position.z + STAIR_FOOT) - 0.5;
+    // Mom and Dad wait at the door and wave to Relu now and then (one wave each, out of step), not nonstop
+    this.parents.forEach((p, i) => {
+      if (E.stage !== 'approach') { p.userData.animate(this.t, p.userData.mode); return; }
+      const len = p.userData.clipLength('wave'), cycle = len + 2.2 + i * 0.9;
+      p.userData.animate(this.t, remaining < 45 && (this.t + i * 1.7) % cycle < len ? 'wave' : 'idle');
+    });
+    // the door swings open as Relu comes up to the stairs
+    const door = this.plane.userData.door;
+    if (door && E.stage === 'approach' && remaining < 30) door.rotation.y += (DOOR_OPEN - door.rotation.y) * Math.min(1, dt * 2.5);
     if (E.stage === 'approach') {
-      this.lane = 1;
+      // he steers freely until the last few meters, then lines up with the stairs
+      if (remaining < 12) { E.locked = true; this.lane = 1; }
       if (remaining < 30) this.speed = Math.max(2.5, Math.min(this.speed, remaining * 0.9));
       if (remaining <= 0.05) {
         this.speed = 0; E.stage = 'climb';
         const start = b.position.clone();
         sound.fanfare();
         this.app.hud({ progress: 1 });
-        this.tl.add(0, 1.6, p => {
+        this.tl.add(0, 2.4, p => {
           // climb the 9 steps up to the door
-          const z = A.position.z + 3.9 - p * 3.7;
-          b.position.set(0, p * 2.5, z);
+          const z = A.position.z + STAIR_FOOT - p * (STAIR_FOOT - STAIR_HEAD);
+          b.position.set(0, p * STAIR_TOP, z);
           b.rotation.y = Math.PI;
         }, () => { E.stage = 'done'; });
-        // the family steps through the door together (the fuselage hides them as they go in)
-        const inside = [b, ...this.parents].map(o => ({ o, z: o.position.z }));
-        this.tl.add(1.8, 0.9, p => { for (const { o, z } of inside) { o.position.z = z - ease.inOut(p) * 2.2; o.rotation.y = Math.PI; } },
+        // the family walks in through the door together (the dark cabin hides them as they go in), and it shuts behind them
+        // (Relu lives in the world group, Mom and Dad in the airport's: both end up 3.3 m inside the door)
+        const inside = [b, ...this.parents].map(o => ({ o, z: o.position.z, to: (o === b ? A.position.z : 0) - 3.3 }));
+        this.tl.add(2.5, 0.01, null, () => this.parents.forEach(p => { p.userData.mode = 'walk'; }));
+        this.tl.add(2.6, 1.1, p => { for (const { o, z, to } of inside) { o.position.z = z + (to - z) * ease.inOut(p); o.rotation.y = Math.PI; } },
           () => inside.forEach(({ o }) => { o.visible = false; }));
+        if (door) this.tl.add(3.75, 0.6, p => { door.rotation.y = DOOR_OPEN * (1 - ease.inOut(p)); });
         // the stair truck rolls back, the engines roar, and the plane takes off
         const st = this.stairs, stZ = st.position.z;
-        this.tl.add(2.9, 1.2, p => { st.position.z = stZ + ease.inOut(p) * 4.5; st.position.x = -ease.inOut(p) * 1.5; });
-        this.tl.add(3.6, 0.01, null, () => sound.engine());
+        this.tl.add(4.3, 1.2, p => { st.position.z = stZ + ease.inOut(p) * 4.5; st.position.x = -ease.inOut(p) * 1.5; });
+        this.tl.add(4.8, 0.01, null, () => sound.engine());
         const smooth = (a, c, x) => { const k = Math.min(1, Math.max(0, (x - a) / (c - a))); return k * k * (3 - 2 * k); };
-        this.tl.add(4.0, 5.2, p => {
+        this.tl.add(5.2, 5.2, p => {
           E.stage = 'takeoff';
           const P = this.plane;
           P.position.x = PLANE_X - p * p * 110;                               // gathering speed down the runway
@@ -450,7 +464,7 @@ export class Level1 {
           P.position.y = lift * lift * 30;                                     // wheels leave the ground halfway
           P.rotation.z = -0.2 * smooth(0.42, 0.6, p) + 0.08 * smooth(0.8, 1, p);   // nose up at rotation, then settle into the climb
         });
-        this.tl.add(8.8, 0.01, null, () => this.app.levelComplete(this.result()));
+        this.tl.add(10.0, 0.01, null, () => this.app.levelComplete(this.result()));
         E.cam = true;
         E.camFrom = this.camera.position.clone();
       }
@@ -460,14 +474,14 @@ export class Level1 {
       const p = Math.min(1, E.ct / 1.5), e = ease.inOut(p);
       if (E.stage !== 'takeoff') {
         // swing round to watch Relu climb up to Mom and Dad at the door
-        this.camera.position.lerpVectors(E.camFrom, new THREE.Vector3(-5.5, 3.8, A.position.z + 9.5), e);
-        this.camera.lookAt(0.4, 2.4, A.position.z - 0.4);
+        this.camera.position.lerpVectors(E.camFrom, new THREE.Vector3(-7.5, 5.6, A.position.z + 13), e);
+        this.camera.lookAt(0.4, 3.9, A.position.z - 0.6);
       } else {
         // then follow the plane down the runway and up into the sky
         const P = this.plane.position;
-        const want = new THREE.Vector3(P.x + 18, 5 + P.y * 0.75, A.position.z + 26);
+        const want = new THREE.Vector3(P.x + 26, 6 + P.y * 0.75, A.position.z + 38);
         this.camera.position.lerp(want, Math.min(1, dt * 1.6));
-        this.camera.lookAt(P.x - 3, 2.5 + P.y, A.position.z - 3.1);
+        this.camera.lookAt(P.x - 5, 3.5 + P.y, A.position.z - 4.75);
       }
     }
   }

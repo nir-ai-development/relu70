@@ -70,11 +70,41 @@ export function makeSky({ top = '#4f86cf', mid = '#a9cdec', horizon = '#fbe3c4',
 // Rebuild the binary GLB in memory so the loader never has to fetch a data: URL.
 // assets are packed offline with gltfpack (meshopt-compressed, smooth normals already baked in);
 // the JSON sources and the packing script live in Dad70/src_models
+// index.html's build stamp keeps a phone from mixing cached files of two deploys
+export const asset = url => `${url}?v=${document.querySelector('meta[name=build]')?.content || 0}`;
 const gltfLoader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
-export async function loadGltf(url) {
-  const res = await fetch(url);
+
+// download progress for the loading bars: bytes received out of bytes expected, over every asset
+// downloading right now (the count starts again once they have all arrived)
+const meter = { got: 0, want: 0, busy: 0, listener: null };
+export const onLoadProgress = fn => { meter.listener = fn; };
+const report = () => meter.listener?.(meter.want ? Math.min(1, meter.got / meter.want) : 0);
+async function download(url) {
+  const res = await fetch(asset(url));
   if (!res.ok) throw new Error(url + ' ' + res.status);
-  const gltf = await gltfLoader.parseAsync(await res.arrayBuffer(), '');
+  // (a compressed response reports its compressed size, so cap each file's share at that)
+  const size = +res.headers.get('content-length') || 1;
+  meter.busy++; meter.want += size; report();
+  const parts = []; let n = 0, counted = 0;
+  try {
+    const reader = res.body.getReader();
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      parts.push(value); n += value.length;
+      const add = Math.min(value.length, size - counted); counted += add; meter.got += add; report();
+    }
+  } finally {
+    meter.got += size - counted;
+    if (--meter.busy === 0) { report(); meter.got = meter.want = 0; } else report();
+  }
+  const out = new Uint8Array(n); let o = 0;
+  for (const p of parts) { out.set(p, o); o += p.length; }
+  return out.buffer;
+}
+
+export async function loadGltf(url) {
+  const gltf = await gltfLoader.parseAsync(await download(url), '');
   gltf.scene.traverse(o => { if (o.isMesh) o.material.normalMap = null; });
   return gltf;
 }
@@ -93,7 +123,7 @@ export function canvasTex(w, h, draw, repeat) {
 
 const loader = new THREE.TextureLoader();
 export function photoTex(url) {
-  const t = loader.load(url);
+  const t = loader.load(asset(url));
   t.colorSpace = THREE.SRGBColorSpace;
   return t;
 }

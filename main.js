@@ -1,4 +1,4 @@
-import { THREE, mesh, paint, sound, save, studioEnv, makeSky } from './engine.js';
+import { THREE, mesh, paint, sound, save, studioEnv, makeSky, asset, onLoadProgress } from './engine.js';
 import { makeTree, makeHouse, makeLamp, cobbleTex, slabTex } from './props1.js';
 import { EffectComposer } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/postprocessing/EffectComposer.js/+esm';
 import { RenderPass } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/postprocessing/RenderPass.js/+esm';
@@ -180,7 +180,19 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 $('stage').appendChild(renderer.domElement);
 // the title screen and the first level are ready before the start button; the rest load as they're opened
+// the loading bar (shown from the first paint by index.html, under the title)
+const loadingUI = {
+  show(text, overLevel) { $('loading-text').textContent = text; $('loading').classList.toggle('level', overLevel); $('loading').hidden = false; },
+  hide() { $('loading').hidden = true; },
+};
+onLoadProgress(p => {
+  const bar = $('loading-fill').parentElement;
+  bar.classList.toggle('wait', p === 0);
+  $('loading-fill').style.width = `${Math.round(p * 100)}%`;
+  if ($('btn-start').disabled && p) $('btn-start').textContent = `טוען את העולם… ${Math.round(p * 100)}%`;
+});
 await Promise.all([loadCharacters(LEVELS[0].load.figures), loadModels(LEVELS[0].load.models)]);
+loadingUI.hide();
 const loadLevel = i => { const L = LEVELS[i].load || {}; return Promise.all([loadModels(L.models || []), loadFigures(L.figures || [])]); };
 // the start button waits (and says so) until every sculpted model has arrived
 Object.assign($('btn-start'), { disabled: false, textContent: 'יוצאים לדרך' });
@@ -293,13 +305,13 @@ const app = {
     $('story-date').textContent = L.story.date;
     $('story-title').textContent = L.story.title;
     $('story-body').innerHTML = L.story.body.map(p => `<p>${p}</p>`).join('');
-    $('story-photos').innerHTML = L.story.photos.map(src => `<img src="${src}" alt="">`).join('');
+    $('story-photos').innerHTML = L.story.photos.map(src => `<img src="${asset(src)}" alt="">`).join('');
     only('screen-story');
   },
   async startLevel() {
     const loading = loadLevel(this.levelIndex);
-    const slow = setTimeout(() => this.toast('טוען את השלב…'), 300);
-    await loading; clearTimeout(slow);
+    const slow = setTimeout(() => loadingUI.show('טוען את השלב…', true), 150);
+    await loading; clearTimeout(slow); loadingUI.hide();
     this.fade(() => {
       only(null);
       this.endLevel();
