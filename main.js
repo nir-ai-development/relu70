@@ -24,24 +24,24 @@ const only = id => SCREENS.forEach(s => show(s, s === id));
 // `load` lists the sculpted props and rigged people each level needs; they download when it's opened
 const LEVELS = [
   { yr: '1958', name: 'בורחים לישראל', img: 'era1_toddler', ready: true, make: app => new Level1(app),
-    load: { models: ['plane', 'suitcase', 'teddy', 'piano', 'armchair', 'goose', 'houseA', 'houseB', 'tree', 'barrel', 'cart', 'lamp', 'bed', 'window',
-      'openCase', 'bottle', 'blanket', 'terminal', 'tower', 'luggageCart', 'fuelTruck'], figures: ['mom', 'dad'] },
+    load: { models: ['ship', 'suitcase', 'teddy', 'piano', 'armchair', 'goose', 'houseA', 'houseB', 'tree', 'barrel', 'cart', 'lamp', 'bed', 'window',
+      'openCase', 'bottle', 'blanket', 'terminal', 'luggageCart'], figures: ['mom', 'dad'] },
     story: {
       date: 'פיאטרה נמץ, רומניה · 7.7.1958',
       title: 'בורחים לישראל',
       body: [
         'רלו הקטן בן שנתיים. ב-7 ביולי 1958 המשפחה מקבלת את המסמך הכי חשוב שלה: תעודת מסע לישראל. רלו רשום בה, עם התמונה שלו.',
-        'קודם אורזים את המזוודה, ואז רצים לשדה התעופה לפני שהמטוס ממריא!',
+        'קודם אורזים את המזוודה, ואז רצים לנמל לפני שהאונייה מפליגה!',
       ],
       photos: ['assets/era1_toddler.jpg', 'assets/cert_1958.jpg'],
     },
     howto: {
-      title: 'רצים לשדה התעופה!', go: 'רוץ, רלו, רוץ!',
-      text: 'המטוס לישראל עומד להמריא. אספו בולים, תתחמקו ממכשולים, ואל תפספסו את הטיסה.',
+      title: 'רצים לנמל!', go: 'רוץ, רלו, רוץ!',
+      text: 'האונייה לישראל עומדת להפליג. אספו בולים, תתחמקו ממכשולים, ואל תפספסו אותה.',
       items: [['⇆', 'החלקה ימינה ושמאלה', 'או חיצים במקלדת'], ['⤒', 'החלקה למעלה או נגיעה', 'או רווח · קפיצה'], ['❤', '3 חיים', 'בקבוק חלב מחזיר לב']],
     },
-    hud: { labels: ['פיאטרה נמץ', 'לישראל ✈'], icon: '✉', hearts: true },
-    result: { label: 'Israel · July 1958', title: 'רלו בדרך לישראל!', text: 'רלו עלה למטוס עם אמא ואבא.', mark: ['ISRAEL', '1958'] } },
+    hud: { labels: ['פיאטרה נמץ', 'לישראל ⚓'], icon: '✉', hearts: true },
+    result: { label: 'Israel · July 1958', title: 'רלו בדרך לישראל!', text: 'רלו עלה לאונייה עם אמא ואבא.', mark: ['ISRAEL', '1958'] } },
   { yr: '1966', name: 'הפסנתר בירושלים', img: 'era2_piano', ready: true, make: app => new Level2(app),
     load: { models: ['piano', 'pianoBench', 'archWindow', 'bookshelf', 'sofa', 'plant'], figures: ['kid', 'teacher'] },
     story: {
@@ -133,7 +133,7 @@ const LEVELS = [
     hud: { labels: ['הפגישה הראשונה', 'ביחד 💍'], icon: '❤', hearts: false },
     result: { label: 'Jerusalem · 1980', title: 'רלו ואלין!', text: 'ומכאן הכול התחיל.', mark: ['RELU ♥ ALINE', '1980'] } },
   { yr: '1983–1990', name: 'אבא לארבעה', img: 'era7_dad', ready: true, make: app => new Level7(app),
-    load: { models: ['lounger', 'tree', 'houseA'], figures: ['father', 'girlKid', 'boyKid', 'nir'] },
+    load: { models: ['lounger', 'tree', 'houseA'], figures: ['father', 'karin', 'idan', 'tal', 'nir'] },
     story: {
       date: 'שנות ה-80',
       title: 'אבא לארבעה',
@@ -172,6 +172,7 @@ const LEVELS = [
 
 // ---------- renderer ----------
 const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.localClippingEnabled = true;   // Level 1's street stops at the quay
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -207,7 +208,7 @@ composer.addPass(new OutputPass());
 
 // ---------- title scene: toddler Relu with his suitcase on a little island ----------
 class TitleScene {
-  // Relu on his street in Piatra Neamț at sunset, suitcase at his feet, the plane passing overhead
+  // Relu on his street in Piatra Neamț at sunset, suitcase at his feet
   constructor() {
     const scene = this.scene = new THREE.Scene();
     scene.background = new THREE.Color(0xe8b68e);
@@ -245,15 +246,12 @@ class TitleScene {
     const sc = makeSuitcase(0.75); sc.position.set(0.9, 0, 0.2); sc.rotation.y = -0.4; sc.traverse(m => { m.castShadow = !!m.isMesh; }); scene.add(sc);
     sun.target.position.set(0, 0, 0);
 
-    // the plane to Israel crossing the evening sky, again and again
-    this.plane = model('plane');
-    if (this.plane) { this.plane.scale.setScalar(0.35); scene.add(this.plane); }
     this.t = 0;
   }
   resize(a) {
     this.camera.aspect = a; this.camera.fov = a < 1 ? 60 : 40; this.camera.updateProjectionMatrix();
     // Relu sits in the upper half so the title can go below him
-    // a low, child's-eye camera tilted up: the sunset sky and the plane fill the top, Relu stands above the title
+    // a low, child's-eye camera tilted up: the sunset sky fills the top, Relu stands above the title
     this.camera.position.set(0, 0.75, a < 1 ? 9 : 7);
     this.camera.lookAt(0, a < 1 ? -0.1 : 0.6, -4);
   }
@@ -261,10 +259,6 @@ class TitleScene {
     this.t += dt;
     // mostly idle, with a little wave every few seconds
     this.baby.userData.animate(this.t, this.t % 7 > 4.6 ? 'wave' : 'idle');
-    if (this.plane) {
-      const p = (this.t * 0.05) % 1;
-      this.plane.position.set(45 - p * 90, 12.5 + Math.sin(p * Math.PI) * 1.5, -55);
-    }
   }
 }
 

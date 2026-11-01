@@ -49,9 +49,12 @@ const FIGURES = {
   doctor: { url: 'assets/relu_doctor.glb', m: 1.78 },     // Dr. Avraham, Hadassah
   aline: { url: 'assets/aline.glb', m: 1.65 },
   father: { url: 'assets/relu_father.glb', m: 1.78 },     // father of four, 1989
+  karin: { url: 'assets/karin_kid.glb', m: 1.5 },         // the four children, from their childhood photo
+  idan: { url: 'assets/idan_kid.glb', m: 1.4 },
+  tal: { url: 'assets/tal_kid.glb', m: 1.25 },
   girlKid: { url: 'assets/girl_kid.glb', m: 1.05 },
   boyKid: { url: 'assets/boy_kid.glb', m: 1.2 },
-  nir: { url: 'assets/nir_kid.glb', m: 1.3 },            // Nir, the youngest of the four
+  nir: { url: 'assets/nir_kid.glb', m: 1.3 },
   saba: { url: 'assets/saba.glb', m: 1.75 },              // Saba Relu, 70
 };
 const figures = {}, pending = {};

@@ -1,7 +1,7 @@
 import { THREE, paint, mesh, canvasTex, photoTex, makeSky } from './engine.js';
 import { model } from './models.js';
 
-// Level 1 scenery and props: the Avraham flat in Piatra Neamț, the street to the airport, and the plane.
+// Level 1 scenery and props: the Avraham flat in Piatra Neamț, the street to the port, and the ship.
 // Sculpted Meshy models are used where they exist; the hand-built versions are fallbacks.
 
 const rnd = (() => { let s = 7; return () => (s = (s * 16807) % 2147483647) / 2147483647; })();
@@ -88,13 +88,6 @@ const signTex = (lines, bg = '#1f4e9c') => canvasTex(512, 192, (g, w, h) => {
   g.font = 'bold 54px Courier Prime, Courier New, monospace'; g.fillText(lines[0], w / 2, lines[1] ? 70 : h / 2);
   if (lines[1]) { g.font = 'bold 40px Courier Prime, Courier New, monospace'; g.fillText(lines[1], w / 2, 132); }
   grain(g, w, h, 1500, 0.08);
-});
-const flagTex = () => canvasTex(256, 180, (g, w, h) => {
-  g.fillStyle = '#fff'; g.fillRect(0, 0, w, h);
-  g.fillStyle = '#0038b8'; g.fillRect(0, 22, w, 26); g.fillRect(0, h - 48, w, 26);
-  g.strokeStyle = '#0038b8'; g.lineWidth = 8;
-  const cx = w / 2, cy = h / 2, r = 34;
-  for (const rot of [0, Math.PI]) { g.beginPath(); for (let i = 0; i < 3; i++) { const a = rot - Math.PI / 2 + i * 2 * Math.PI / 3; g[i ? 'lineTo' : 'moveTo'](cx + r * Math.cos(a), cy + r * Math.sin(a)); } g.closePath(); g.stroke(); }
 });
 const mountainPainting = () => canvasTex(512, 320, (g, w, h) => {
   const gr = g.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, '#8fbce6'); gr.addColorStop(0.7, '#f7dcb6'); g.fillStyle = gr; g.fillRect(0, 0, w, h);
@@ -436,61 +429,54 @@ export function makeLandscape() {
   return g;
 }
 
-// ---------- airport ----------
-export function makePlane() {
-  const m = model('plane');
-  if (m) {
-    const g = new THREE.Group();
-    // the model's nose already points to -x, matching the take-off direction
-    g.add(m);
-    g.userData.props = [];
-    const d = fitDoor(g, m);
-    if (d) {
-      // big enough for Mom and Dad to walk in upright; doorAt is the sill's centre in the scaled plane
-      const k = DOOR_H / d.h;
-      g.scale.setScalar(k);
-      g.userData.doorAt = d.sill.multiplyScalar(k);
-    }
-    return g;
-  }
+// ---------- the port ----------
+// the ship lies with its bow to -x; the boarding door is in its near side. Returns a group with the waterline at y = 0.
+export function makeShip() {
   const g = new THREE.Group();
-  const silver = paint(0xe9edf2, { metalness: 0.5, roughness: 0.35 }), blue = paint(0x2b55a3, { roughness: 0.4 });
-  const body = mesh(new THREE.CylinderGeometry(1.2, 1.2, 13, 32), silver); body.rotation.z = Math.PI / 2; g.add(body);
-  const nose = mesh(new THREE.SphereGeometry(1.2, 32, 16), silver, -6.5, 0, 0); nose.scale.set(1.7, 1, 1); g.add(nose);
-  const tail = mesh(new THREE.CylinderGeometry(1.2, 0.35, 4.5, 32), silver, 8.7, 0.35, 0); tail.rotation.z = Math.PI / 2; g.add(tail);
-  for (const s of [-1, 1]) g.add(mesh(new THREE.BoxGeometry(17, 0.32, 0.05), blue, 0.8, 0.25, s * 1.19));
-  const glass = paint(0x23324d, { roughness: 0.1, metalness: 0.3 });
-  for (let i = 0; i < 9; i++) for (const s of [-1, 1]) {
-    const w = mesh(new THREE.CircleGeometry(0.17, 16), glass, -2.6 + i * 1.15, 0.62, s * 1.205); if (s < 0) w.rotation.y = Math.PI; g.add(w);
+  const m = model('ship') || handBuiltShip();
+  g.add(m);
+  const size = new THREE.Box3().setFromObject(m).getSize(new THREE.Vector3());
+  m.position.y -= WATERLINE * size.y;
+  fitDoor(g, m);
+  const smoke = makeSmoke(); smoke.position.copy(g.userData.funnel); g.add(smoke);
+  g.userData.smoke = smoke;
+  return g;
+}
+function handBuiltShip() {
+  const g = new THREE.Group();
+  g.add(mesh(new THREE.BoxGeometry(80, 12, 11), paint(0x1d2740, { roughness: 0.6 }), 0, 6, 0));
+  g.add(mesh(new THREE.BoxGeometry(56, 6, 9), paint(0xf1ece0, { roughness: 0.6 }), 2, 15, 0));
+  g.add(mesh(new THREE.CylinderGeometry(2.2, 2.4, 9, 20), paint(0xe9d9a8, { roughness: 0.6 }), 0, 22, 0));
+  return g;
+}
+// grey puffs that rise from the funnel, swell and fade, over and over; call update(dt) each frame
+function makeSmoke() {
+  const g = new THREE.Group();
+  const tex = canvasTex(64, 64, (c, w) => {
+    const r = c.createRadialGradient(w / 2, w / 2, 2, w / 2, w / 2, w / 2);
+    r.addColorStop(0, 'rgba(70,68,70,.8)'); r.addColorStop(1, 'rgba(70,68,70,0)');
+    c.fillStyle = r; c.fillRect(0, 0, w, w);
+  });
+  const puffs = [];
+  for (let i = 0; i < 12; i++) {
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
+    g.add(sp); puffs.push({ sp, t: i / 12 });
   }
-  g.add(mesh(new THREE.BoxGeometry(3.2, 0.18, 18), silver, 0.8, -0.55, 0));
-  const fin = mesh(new THREE.BoxGeometry(2.4, 3, 0.15), silver, 9.6, 2.0, 0); fin.rotation.z = -0.35; g.add(fin);
-  const flag = flagTex();
-  for (const s of [-1, 1]) {
-    const f = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 1.0), new THREE.MeshBasicMaterial({ map: flag })); f.position.set(9.75, 2.3, s * 0.085); f.rotation.z = -0.35; if (s < 0) f.rotation.y = Math.PI; g.add(f);
-  }
-  g.add(mesh(new THREE.BoxGeometry(2, 0.12, 6.5), silver, 9.6, 0.5, 0));
-  const props = [];
-  for (const z of [-6, -3, 3, 6]) {
-    const nac = mesh(new THREE.CylinderGeometry(0.45, 0.4, 2.4, 16), silver, -0.6, -0.45, z); nac.rotation.z = Math.PI / 2; g.add(nac);
-    const p = new THREE.Group(); p.position.set(-1.9, -0.45, z);
-    for (let b = 0; b < 3; b++) { const bl = mesh(new THREE.BoxGeometry(0.06, 1.7, 0.2), 0x30343c); bl.rotation.x = b * 2.094; p.add(bl); }
-    g.add(p); props.push(p);
-  }
-  for (const [x, z] of [[-5.5, 0], [0.8, -3], [0.8, 3]]) {
-    g.add(mesh(new THREE.CylinderGeometry(0.08, 0.08, 1.4, 6), 0x5a5a5a, x, -1.6, z));
-    const w = mesh(new THREE.CylinderGeometry(0.42, 0.42, 0.3, 16), 0x1d1d1d, x, -2.2, z); w.rotation.x = Math.PI / 2; g.add(w);
-  }
-  g.add(mesh(new THREE.BoxGeometry(0.9, 1.5, 0.05), 0x30343c, -4.2, 0.1, 1.2));
-  g.position.y = 2.65;   // wheels on the ground
-  const outer = new THREE.Group(); outer.add(g);
-  outer.userData.props = props;
-  return outer;
+  g.userData.update = dt => {
+    for (const P of puffs) {
+      P.t = (P.t + dt / 5) % 1;
+      P.sp.position.set(P.t * 16, P.t * 13, 0);
+      P.sp.scale.setScalar(2.5 + P.t * 9);
+      P.sp.material.opacity = 1 - P.t;
+    }
+  };
+  g.userData.update(0);
+  return g;
 }
 
-// the boarding door, lying flush on the fuselage: every layer follows the side's measured profile
-// (surf(y) = the skin's z at height y): a trim outline, the dark cabin behind the opening, and a door leaf
-// hinged on the tail side that swings out flat against the plane (leaf.rotation.y: 0 shut, DOOR_OPEN wide open)
+// the boarding door, lying flush on the hull: every layer follows the side's measured profile
+// (surf(y) = the skin's z at height y): a trim outline, the dark inside behind the opening, and a door leaf
+// hinged on the stern side that swings out flat against the hull (leaf.rotation.y: 0 shut, DOOR_OPEN wide open)
 function curvedPanel(w, y0, y1, lift, surf, x0 = -w / 2) {
   const nx = 4, ny = 14, pos = [], idx = [];
   for (let j = 0; j <= ny; j++) for (let i = 0; i <= nx; i++) {
@@ -505,7 +491,7 @@ function curvedPanel(w, y0, y1, lift, surf, x0 = -w / 2) {
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx); g.computeVertexNormals();
   return g;
 }
-function makePlaneDoor(W, y0, y1, surf) {
+function makeHullDoor(W, y0, y1, surf) {
   const g = new THREE.Group(), H = y1 - y0, t = H / 30;   // t: trim and gap widths, in step with the door's size
   const flat = o => { o.castShadow = false; return o; };
   g.add(flat(mesh(curvedPanel(W + 2 * t, y0 - t, y1 + t, t * 0.2, surf), paint(0x8e949c, { metalness: 0.3, roughness: 0.5 }))));
@@ -522,38 +508,40 @@ function makePlaneDoor(W, y0, y1, surf) {
   return g;
 }
 
-// where the model's painted passenger door is: its centre as a fraction of the length from the nose, and its
-// bottom and top as fractions of the fuselage's height there. The plane is scaled so the doorway is DOOR_H tall.
-const DOOR_ALONG = 0.218, DOOR_LOW = 0.32, DOOR_HIGH = 0.86, DOOR_H = 3.1;
-// measure the fuselage at the door and put a working door over the painted one; returns the door sill's
-// centre on the skin (in the plane's own frame, before g's scale) and the door's height
+// the door's centre as a fraction of the length from the bow, its sill and height above the water; the waterline
+// as a fraction of the model's height; the funnel as a fraction of the length; how far in from the side the deck rail stands
+const DOOR_ALONG = 0.42, DOOR_Y = 3.0, DOOR_H = 3.4, WATERLINE = 0.093, FUNNEL_ALONG = 0.475, RAIL_IN = 1.2;
+// measure the hull at the door and fit a working door to it. userData gets: door (its hinge), doorAt (the sill's
+// centre on the skin), side (the hull's furthest z), funnel (its top), deck (a spot on the open deck above the door)
 function fitDoor(g, m) {
   m.updateMatrixWorld(true);
   const box = new THREE.Box3().setFromObject(m), V = THREE.Vector3, rc = new THREE.Raycaster();
   const hit = (o, d) => { rc.set(o, d); return rc.intersectObject(m, true)[0]?.point; };
-  const x = box.min.x + DOOR_ALONG * (box.max.x - box.min.x);
-  const top = hit(new V(x, box.max.y + 5, 0), new V(0, -1, 0)), bot = hit(new V(x, box.min.y - 5, 0), new V(0, 1, 0));
-  if (!top || !bot) return null;
-  const h = top.y - bot.y, y0 = bot.y + DOOR_LOW * h, y1 = bot.y + DOOR_HIGH * h;
-  // the skin's z at a run of heights across the door, from rays fired at the plane's side
-  const rows = [];
+  const L = box.max.x - box.min.x, x = box.min.x + DOOR_ALONG * L;
+  const y0 = DOOR_Y, y1 = y0 + DOOR_H, rows = [];
+  // the skin's z at a run of heights across the door, from rays fired at the ship's side
   for (let i = 0; i <= 20; i++) {
     const y = y0 + (y1 - y0) * (i / 20 * 1.2 - 0.1), p = hit(new V(x, y, box.max.z + 5), new V(0, 0, -1));
     if (p) rows.push([y, p.z]);
   }
-  if (!rows.length) return null;
+  if (!rows.length) rows.push([y0, box.max.z]);
   const surf = y => {
     if (y <= rows[0][0]) return rows[0][1];
     for (let i = 1; i < rows.length; i++) if (y <= rows[i][0]) { const [ya, za] = rows[i - 1], [yb, zb] = rows[i]; return za + (zb - za) * (y - ya) / (yb - ya); }
     return rows[rows.length - 1][1];
   };
-  const door = makePlaneDoor(0.62 * (y1 - y0), y0, y1, surf); door.position.x = x; g.add(door);
+  const door = makeHullDoor(0.62 * DOOR_H, y0, y1, surf); door.position.x = x; g.add(door);
+  const fx = box.min.x + FUNNEL_ALONG * L;
+  const deckZ = surf(y1) - RAIL_IN, deckAt = hit(new V(x + 3, box.max.y + 5, deckZ), new V(0, -1, 0));
   g.userData.door = door.userData.leaf;
-  return { sill: new V(x, y0, surf(y0)), h: y1 - y0 };
+  g.userData.doorAt = new V(x, y0, surf(y0));
+  g.userData.side = box.max.z;
+  g.userData.funnel = hit(new V(fx, box.max.y + 5, 0), new V(0, -1, 0)) || new V(fx, box.max.y, 0);
+  g.userData.deck = new V(x + 3, deckAt ? deckAt.y : y1 + 2, deckZ);
 }
 export const DOOR_OPEN = 2.85;
 
-// a 1950s boarding-stair truck: the treads keep the path the climb animation follows
+// a 1950s boarding-stair wagon: the treads keep the path the climb animation follows
 // (top step at y 2.4, z 0.2; each step 0.27 down and 0.4 forward; foot at z ≈ 3.9)
 export function makeStairs() {
   const g = new THREE.Group();
@@ -566,7 +554,7 @@ export function makeStairs() {
     g.add(mesh(new THREE.BoxGeometry(1.42, 0.06, 0.44), rubber, 0, y + 0.03, z));
     g.add(mesh(new THREE.BoxGeometry(1.42, rise, 0.05), cream, 0, y - rise / 2, z + 0.2));
   }
-  // solid side panels following the slope, with a red airline stripe
+  // solid side panels following the slope, with a red stripe
   const side = new THREE.Shape();
   side.moveTo(-1.75, 0.42); side.lineTo(4.15, 0.42); side.lineTo(4.15, 0.75); side.lineTo(0.15, 2.75); side.lineTo(-1.75, 2.75); side.closePath();
   const panelGeo = new THREE.ExtrudeGeometry(side, { depth: 0.08, bevelEnabled: true, bevelSize: 0.02, bevelThickness: 0.02, bevelSegments: 2 });
@@ -608,14 +596,31 @@ export function makeStairs() {
 
 export const makeTerminal = () => model('terminal');
 export const makeLuggageCart = () => model('luggageCart');
-export const makeFuelTruck = () => model('fuelTruck');
 
-export function makeControlTower() {
-  const m = model('tower');
-  if (m) return m;
-  const g = new THREE.Group();
-  g.add(mesh(new THREE.CylinderGeometry(1.2, 1.5, 8, 16), paint(0xe7e1d2, { roughness: 0.8 }), 0, 4, 0));
-  g.add(mesh(new THREE.CylinderGeometry(2.2, 1.6, 2, 16), paint(0x29466e, { roughness: 0.15, metalness: 0.4 }), 0, 9, 0));
-  g.add(mesh(new THREE.ConeGeometry(2.3, 1, 16), paint(0xc63a3a, { roughness: 0.6 }), 0, 10.5, 0));
+// the harbour's far lighthouse, on its rock
+export function makeLighthouse() {
+  const g = new THREE.Group(), white = paint(0xf2eee4, { roughness: 0.8 }), red = paint(0xc0392f, { roughness: 0.7 });
+  g.add(mesh(new THREE.CylinderGeometry(7, 9, 2, 12), paint(0x6d675c, { roughness: 1 }), 0, 1, 0));
+  for (let i = 0; i < 4; i++) g.add(mesh(new THREE.CylinderGeometry(1.9 - i * 0.2, 2.1 - i * 0.2, 3.5, 16), i % 2 ? red : white, 0, 3.75 + i * 3.5, 0));
+  g.add(mesh(new THREE.CylinderGeometry(1.4, 1.4, 1.6, 16), paint(0xffe9a8, { roughness: 0.2, emissive: 0xffc860, emissiveIntensity: 0.5 }), 0, 17.3, 0));
+  g.add(mesh(new THREE.ConeGeometry(1.7, 1.3, 16), red, 0, 18.75, 0));
+  return g;
+}
+// a dockside crane: a steel tower on legs with a long jib over the water
+export function makeCrane() {
+  const g = new THREE.Group(), steel = paint(0x8a4b32, { roughness: 0.75, metalness: 0.2 });
+  for (const x of [-1.8, 1.8]) for (const z of [-1.8, 1.8]) g.add(mesh(new THREE.BoxGeometry(0.35, 7, 0.35), steel, x, 3.5, z));
+  g.add(mesh(new THREE.BoxGeometry(4.2, 0.5, 4.2), steel, 0, 7, 0));
+  g.add(mesh(new THREE.BoxGeometry(1.1, 9, 1.1), steel, 0, 11.5, 0));
+  g.add(mesh(new THREE.BoxGeometry(2.6, 2.2, 2.6), paint(0xe2c46a, { roughness: 0.7 }), 0, 16.6, 0));
+  const jib = mesh(new THREE.BoxGeometry(0.5, 0.5, 15), steel, 0, 18.6, -5.5); jib.rotation.x = -0.18; g.add(jib);
+  g.add(mesh(new THREE.BoxGeometry(0.06, 7, 0.06), 0x30343c, 0, 16, -12));
+  g.add(mesh(new THREE.BoxGeometry(1.5, 1, 1.1), paint(0x7a5a38, { roughness: 0.9 }), 0, 12.2, -12));
+  return g;
+}
+export function makeBollard() {
+  const g = new THREE.Group(), iron = paint(0x2c3036, { roughness: 0.6, metalness: 0.3 });
+  g.add(mesh(new THREE.CylinderGeometry(0.28, 0.34, 0.75, 12), iron, 0, 0.37, 0));
+  g.add(mesh(new THREE.CylinderGeometry(0.42, 0.42, 0.14, 12), iron, 0, 0.8, 0));
   return g;
 }

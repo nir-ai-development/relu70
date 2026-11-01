@@ -184,7 +184,7 @@ class Sound {
   pop() { this.tone(620, .12, 'sine', .3, 0, 300); }
   nope() { this.tone(220, .14, 'square', .12); this.tone(185, .2, 'square', .12, .12); }
   fanfare() { [523, 659, 784, 1047, 784, 1047].forEach((f, i) => this.tone(f, i === 5 ? .6 : .18, 'triangle', .25, i * .13)); }
-  engine() { this.tone(70, 2.5, 'sawtooth', .08, 0, 120); }
+  horn() { for (const f of [98, 147]) this.tone(f, 2.2, 'sawtooth', .1); }
   // a soft upright-piano note: a struck fundamental with a quieter octave and a fast decay
   piano(freq, vol = 0.28, when = 0) {
     this.tone(freq, 1.1, 'triangle', vol, when);

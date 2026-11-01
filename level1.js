@@ -3,15 +3,15 @@ import { makeBabyRelu, makeAdult, makeFigure, makeSuitcase } from './character.j
 import {
   buildRoom, makeOpenCase, makeTeddy, makeBottle, makeBlanket, makeCertificate, makePhotoFrame, makePiano, makeArmchair, makeGoose,
   makeBarrel, makeCart, makePuddle, makeHouse, makeTree, makeLamp, makeTower, makeSign, makeStamp, makeLandscape,
-  makePlane, DOOR_OPEN, makeStairs, makeControlTower, makeTerminal, makeLuggageCart, makeFuelTruck, cobbleTex, slabTex, concreteTex,
+  makeShip, DOOR_OPEN, makeStairs, makeLighthouse, makeCrane, makeBollard, makeTerminal, makeLuggageCart, cobbleTex, slabTex, concreteTex,
 } from './props1.js';
 
 // Level 1 · Piatra Neamț, July 1958
 // Phase "pack": tap the five things a toddler needs into the suitcase (and learn what can't come).
-// Phase "run":  three-lane run through town to the plane to Israel.
+// Phase "run":  three-lane run through town to the ship to Israel.
 
 const LANES = [-1.6, 0, 1.6];
-const GOAL = 500;          // meters to the airport
+const GOAL = 500;          // meters to the port
 const GRAVITY = 30, JUMP_V = 9.6;
 
 function disposeTree(obj) {
@@ -72,7 +72,7 @@ export class Level1 {
       { id: 'photo', name: 'תמונה של אמא ואבא', good: true, obj: makePhotoFrame(), pos: [-2.4, -1.4], rot: 0.35 },
       { id: 'piano', good: false, obj: makePiano(), pos: [-1.7, -3.35], rot: 0, msg: 'פסנתר לא נכנס למזוודה! הוא יחכה לרלו בירושלים' },
       { id: 'chair', good: false, obj: makeArmchair(), pos: [3.7, 2.0], rot: -0.9, msg: 'הכורסה של סבתא כבדה מדי' },
-      { id: 'goose', good: false, obj: makeGoose(), pos: [1.7, -1.3], rot: -0.6, msg: 'האווז נשאר בחצר. הוא לא טס לישראל!' },
+      { id: 'goose', good: false, obj: makeGoose(), pos: [1.7, -1.3], rot: -0.6, msg: 'האווז נשאר בחצר. הוא לא מפליג לישראל!' },
     ];
     for (const it of items) {
       it.obj.position.set(it.pos[0], 0, it.pos[1]);
@@ -163,7 +163,7 @@ export class Level1 {
     // tear down whatever was there (room, or a previous run); the baby is reused
     if (this.baby.parent) this.baby.parent.remove(this.baby);
     for (const g of [this.room, this.world]) if (g) { this.scene.remove(g); disposeTree(g); }
-    this.airport = null; this.ending = null; this.dead = false; this.parents = [];
+    this.port = null; this.ending = null; this.dead = false; this.parents = [];
     this.room = null;
     this.tl = new Timeline();
     this.phase = 'run';
@@ -176,12 +176,14 @@ export class Level1 {
     const land = this.land = makeLandscape();
     W.add(land);
     this.roadTex = cobbleTex();
-    const road = mesh(new THREE.PlaneGeometry(5.4, 240), paint(0xffffff, { map: this.roadTex, bumpMap: this.roadTex, bumpScale: 1.5, roughness: 0.75 }), 0, 0, -100);
+    // the street stops at the quay: clipped there, so it doesn't run on across the harbour
+    const clip = this.roadClip = new THREE.Plane(new THREE.Vector3(0, 0, 1), 1000), clipping = { clippingPlanes: [clip] };
+    const road = mesh(new THREE.PlaneGeometry(5.4, 240), paint(0xffffff, { map: this.roadTex, bumpMap: this.roadTex, bumpScale: 1.5, roughness: 0.75, ...clipping }), 0, 0, -100);
     road.rotation.x = -Math.PI / 2; road.castShadow = false; W.add(road);
     this.walkTex = slabTex();
     for (const s of [-1, 1]) {
-      const walk = mesh(new THREE.PlaneGeometry(1.8, 240), paint(0xffffff, { map: this.walkTex, roughness: 0.85 }), s * 3.6, 0.03, -100); walk.rotation.x = -Math.PI / 2; walk.castShadow = false; W.add(walk);
-      const curb = mesh(new THREE.BoxGeometry(0.2, 0.14, 240), paint(0xb3aa96, { roughness: 0.8 }), s * 2.72, 0.07, -100); W.add(curb);
+      const walk = mesh(new THREE.PlaneGeometry(1.8, 240), paint(0xffffff, { map: this.walkTex, roughness: 0.85, ...clipping }), s * 3.6, 0.03, -100); walk.rotation.x = -Math.PI / 2; walk.castShadow = false; W.add(walk);
+      const curb = mesh(new THREE.BoxGeometry(0.2, 0.14, 240), paint(0xb3aa96, { roughness: 0.8, ...clipping }), s * 2.72, 0.07, -100); W.add(curb);
     }
 
     // recycling scenery
@@ -203,7 +205,7 @@ export class Level1 {
     this.oneOffs = [];
     const tower = makeTower(); tower.position.set(-12, 0, -70); W.add(tower); this.oneOffs.push(tower);
     const start = makeSign(['PIATRA NEAMȚ'], '#2e6b3f'); start.position.set(4.3, 0, -10); start.rotation.y = -0.35; W.add(start); this.oneOffs.push(start);
-    this.signsAt = [{ d: 150, lines: ['AEROPORT ✈', '2 km'] }, { d: 310, lines: ['AEROPORT ✈', '1 km'] }];
+    this.signsAt = [{ d: 150, lines: ['PORT ⚓', '2 km'] }, { d: 310, lines: ['PORT ⚓', '1 km'] }];
 
     // player
     const b = this.baby;
@@ -299,20 +301,20 @@ export class Level1 {
 
     for (const o of this.scenery) {
       o.position.z += dz;
-      // once the airport is coming, houses that pass behind the camera don't come back
-      if (o.position.z > 14) { o.position.z -= this.sceneSpan; if (this.airport) o.visible = false; }
+      // once the port is coming, houses that pass behind the camera don't come back
+      if (o.position.z > 14) { o.position.z -= this.sceneSpan; if (this.port) o.visible = false; }
     }
     for (const o of this.oneOffs) o.position.z += dz;
     while (this.signsAt.length && this.dist >= this.signsAt[0].d) {
       const s = makeSign(this.signsAt.shift().lines); s.position.set(4.3, 0, -95); s.rotation.y = -0.3; this.world.add(s); this.oneOffs.push(s);
     }
 
-    // spawn rows until near the airport
+    // spawn rows until near the port
     if (!this.ending && this.dist < GOAL - 112) {   // the last row is passed before the steering locks
       this.nextRow -= dz;
       if (this.nextRow <= 0) { this.spawnRow(-95); this.nextRow = 24 - (this.dist / GOAL) * 9; }
     }
-    if (!this.ending && this.dist >= GOAL - 100) this.spawnAirport();
+    if (!this.ending && this.dist >= GOAL - 100) this.spawnPort();
 
     // player physics
     this.px += (LANES[this.lane] - this.px) * Math.min(1, dt * 14);
@@ -364,7 +366,7 @@ export class Level1 {
       this.camera.position.set(cx + sh, 3.4 + this.py * 0.25, narrow ? 6.2 : 6.4);
       this.camera.lookAt(this.px * 0.35, narrow ? 0.7 : 1.1, -9);
     }
-    if (!this.dead) this.babyMode = this.py > 0.05 ? 'jump' : this.ending && this.ending.stage === 'climb' ? 'walk' : this.ending && this.ending.stage === 'done' ? 'idle' : 'run';
+    if (!this.dead) this.babyMode = this.py > 0.05 ? 'jump' : this.ending && this.ending.stage === 'climb' ? 'walk' : this.ending && this.ending.stage === 'sail' ? 'cheer' : this.ending && this.ending.stage === 'done' ? 'idle' : 'run';
   }
 
   hit(e) {
@@ -384,20 +386,28 @@ export class Level1 {
     }
   }
 
-  spawnAirport() {
-    if (this.airport) return;
-    const A = this.airport = new THREE.Group();
-    const tarmac = mesh(new THREE.PlaneGeometry(56, 32), paint(0xffffff, { map: concreteTex(), roughness: 0.9 }), 0, 0.05, 0); tarmac.rotation.x = -Math.PI / 2; tarmac.castShadow = false; A.add(tarmac);
-    for (let i = -5; i <= 5; i++) { const l = mesh(new THREE.PlaneGeometry(2.2, 0.35), paint(0xf4e9b0, { roughness: 0.7 }), i * 5, 0.07, 6); l.rotation.x = -Math.PI / 2; l.castShadow = false; A.add(l); }
-    // the stairs meet the front door; the wing stays behind them, out of the camera's way
-    // the stairs grow to the height of the plane's door sill (their top, foot and first step scale with them);
-    // the plane stands with its door at x = 0 and the sill against the end of the stair platform
-    // (the hand-built fallback plane has no door: a rough fit)
-    const plane = this.plane = makePlane(); A.add(plane);
-    const D = plane.userData.doorAt || new THREE.Vector3(-8.5, 2.5, 1.2);
+  spawnPort() {
+    if (this.port) return;
+    const A = this.port = new THREE.Group();
+    // the wagon stairs grow to the height of the ship's door sill (their top, foot and first step scale with them);
+    // the ship lies with its door at x = 0 and the sill against the end of the stairs' platform
+    const ship = this.ship = makeShip(); A.add(ship);
+    const D = ship.userData.doorAt;
     const k = D.y / 2.5, S = this.stair = { k, top: D.y, foot: 3.9 * k - 0.1, head: 0.2 * k - 0.1, end: -0.1 - 1.7 * k };
-    this.planeX = -D.x;
-    plane.position.set(this.planeX, 0, S.end - D.z + 0.05);
+    this.shipX = -D.x; this.shipZ = S.end - D.z + 0.05;
+    ship.position.set(this.shipX, 0, this.shipZ);
+    // the quay runs along the ship; beyond its edge is the harbour
+    const edge = this.quayEdge = Math.max(S.end, this.shipZ + ship.userData.side) + 0.15, depth = 40;
+    const concrete = concreteTex(); concrete.repeat.set(16, 4);
+    const quay = mesh(new THREE.PlaneGeometry(200, depth), paint(0xffffff, { map: concrete, roughness: 0.9 }), 0, 0.05, edge + depth / 2); quay.rotation.x = -Math.PI / 2; quay.castShadow = false; A.add(quay);
+    A.add(mesh(new THREE.BoxGeometry(200, 0.1, 0.5), paint(0x4d4a45, { roughness: 0.9 }), 0, 0.08, edge + 0.25));
+    const water = this.waterTex = canvasTex(256, 256, (g, w, h) => {
+      g.fillStyle = '#2f7f9e'; g.fillRect(0, 0, w, h);
+      g.strokeStyle = 'rgba(255,255,255,.28)'; g.lineWidth = 3;
+      for (let i = 0; i < 26; i++) { g.beginPath(); const x = Math.random() * w, y = Math.random() * h; g.moveTo(x, y); g.bezierCurveTo(x + 20, y - 14, x + 40, y + 12, x + 64, y); g.stroke(); }
+    }, [45, 25]);
+    const sea = mesh(new THREE.PlaneGeometry(1200, 600), paint(0xffffff, { map: water, roughness: 0.25, metalness: 0.1 }), 0, 0, edge - 300); sea.rotation.x = -Math.PI / 2; sea.castShadow = false; A.add(sea);
+    for (let x = -46; x <= 46; x += 11.5) if (Math.abs(x) > 3) { const b = makeBollard(); b.position.set(x, 0.05, edge + 0.8); A.add(b); }
     const stairs = this.stairs = makeStairs(); stairs.scale.setScalar(k); stairs.position.set(0, 0, -0.1); A.add(stairs);
     const small = o => { o.scale.setScalar(0.8); return o; };   // the hand-built fallbacks are oversized
     const mom = makeFigure('mom', 2.9) || small(makeAdult({ coat: 0x7d4f6e, dress: true })); mom.position.set(-0.45, S.top, S.end + 0.75 * k); mom.rotation.y = 0.15;
@@ -405,23 +415,29 @@ export class Level1 {
     for (const p of [mom, dad]) { p.userData.baseScale = p.scale.x; p.userData.mode = 'idle'; }
     A.add(mom, dad);
     this.parents = [mom, dad];
-    const tower = makeControlTower(); tower.position.set(-25, 0, -10); tower.rotation.y = 0.6; A.add(tower);
-    const terminal = makeTerminal(); if (terminal) { terminal.position.set(-17, 0, -17); terminal.rotation.y = 0.4; A.add(terminal); }
-    const cart = makeLuggageCart(); if (cart) { cart.position.set(2.8, 0, 3.4); cart.rotation.y = -0.5; A.add(cart); }
-    const truck = makeFuelTruck(); if (truck) { truck.position.set(34, 0, -16); truck.rotation.y = -2.4; A.add(truck); }
-    const sign = makeSign(['AEROPORT', 'BĂNEASA ✈'], '#1f4e9c'); sign.position.set(-6.5, 0, 9); sign.rotation.y = 0.5; A.add(sign);
+    const crane = makeCrane(); crane.position.set(-27, 0.05, edge + 3.5); A.add(crane);
+    const crane2 = makeCrane(); crane2.position.set(34, 0.05, edge + 3.5); A.add(crane2);
+    const lighthouse = makeLighthouse(); lighthouse.position.set(70, 0, edge - 110); A.add(lighthouse);
+    const terminal = makeTerminal(); if (terminal) { terminal.position.set(-17, 0.05, edge + 19); terminal.rotation.y = 2.8; A.add(terminal); }
+    const cart = makeLuggageCart(); if (cart) { cart.position.set(2.8, 0.05, 3.4); cart.rotation.y = -0.5; A.add(cart); }
+    const sign = makeSign(['PORTUL', 'CONSTANȚA ⚓'], '#1f4e9c'); sign.position.set(-6.5, 0.05, 9); sign.rotation.y = 0.5; A.add(sign);
     A.position.z = -this.world.position.z - (GOAL - this.dist) - 6;
-    // clear the street beyond the tarmac's near edge so nothing stands in the take-off shot
-    for (const o of [...this.scenery, ...this.oneOffs]) if (o.position.z < A.position.z + 24) o.visible = false;
+    // clear the street beyond the quay so nothing stands in the sailing shot
+    for (const o of [...this.scenery, ...this.oneOffs]) if (o.position.z < A.position.z + edge + depth + 4) o.visible = false;
     this.world.add(A);
     this.ending = { stage: 'approach' };
   }
 
   updateEnding(dt, dz) {
-    const A = this.airport, E = this.ending, b = this.baby;
+    const A = this.port, E = this.ending, b = this.baby, ship = this.ship;
     if (!A) return;
     A.position.z += dz;
-    for (const p of this.plane.userData.props) p.rotation.x += dt * (E.stage === 'takeoff' ? 40 : 12);
+    this.roadClip.constant = -(A.position.z + this.quayEdge);
+    // the ship rides the swell, its funnel smokes, and the harbour ripples
+    ship.userData.smoke.userData.update(dt);
+    ship.position.y = Math.sin(this.t * 0.9) * 0.06;
+    ship.rotation.x = Math.sin(this.t * 0.7) * 0.004;
+    this.waterTex.offset.x += dt * 0.02;
     // stairs foot is at A.z + 3.9; stop the world so the baby stops just in front of it
     const S = this.stair, remaining = -(A.position.z + S.foot) - 0.5;
     // Mom and Dad wait at the door and wave to Relu now and then (one wave each, out of step), not nonstop
@@ -431,7 +447,7 @@ export class Level1 {
       p.userData.animate(this.t, remaining < 45 && (this.t + i * 1.7) % cycle < len ? 'wave' : 'idle');
     });
     // the door swings open as Relu comes up to the stairs
-    const door = this.plane.userData.door;
+    const door = ship.userData.door;
     if (door && E.stage === 'approach' && remaining < 30) door.rotation.y += (DOOR_OPEN - door.rotation.y) * Math.min(1, dt * 2.5);
     if (E.stage === 'approach') {
       // he steers freely until the last few meters, then lines up with the stairs
@@ -439,7 +455,6 @@ export class Level1 {
       if (remaining < 30) this.speed = Math.max(2.5, Math.min(this.speed, remaining * 0.9));
       if (remaining <= 0.05) {
         this.speed = 0; E.stage = 'climb';
-        const start = b.position.clone();
         sound.fanfare();
         this.app.hud({ progress: 1 });
         this.tl.add(0, 2.4, p => {
@@ -448,27 +463,36 @@ export class Level1 {
           b.position.set(0, p * S.top, z);
           b.rotation.y = Math.PI;
         }, () => { E.stage = 'done'; });
-        // the family walks in through the door together (the dark cabin hides them as they go in), and it shuts behind them
-        // (Relu lives in the world group, Mom and Dad in the airport's: all end up 1.6 m inside the door)
+        // the family walks in through the door together (the dark inside hides them as they go in), and it shuts behind them
+        // (Relu lives in the world group, Mom and Dad in the port's: all end up 1.6 m inside the door)
         const inside = [b, ...this.parents].map(o => ({ o, z: o.position.z, to: (o === b ? A.position.z : 0) + S.end - 1.6 }));
         this.tl.add(2.5, 0.01, null, () => this.parents.forEach(p => { p.userData.mode = 'walk'; }));
         this.tl.add(2.6, 1.1, p => { for (const { o, z, to } of inside) { o.position.z = z + (to - z) * ease.inOut(p); o.rotation.y = Math.PI; } },
           () => inside.forEach(({ o }) => { o.visible = false; }));
         if (door) this.tl.add(3.75, 0.6, p => { door.rotation.y = DOOR_OPEN * (1 - ease.inOut(p)); });
-        // the stair truck rolls back, the engines roar, and the plane takes off
+        // the stair wagon rolls back and the ship sounds its horn
         const st = this.stairs, stZ = st.position.z;
         this.tl.add(4.3, 1.2, p => { st.position.z = stZ + ease.inOut(p) * 4.5; st.position.x = -ease.inOut(p) * 1.5; });
-        this.tl.add(4.8, 0.01, null, () => sound.engine());
-        const smooth = (a, c, x) => { const k = Math.min(1, Math.max(0, (x - a) / (c - a))); return k * k * (3 - 2 * k); };
-        this.tl.add(5.2, 5.2, p => {
-          E.stage = 'takeoff';
-          const P = this.plane;
-          P.position.x = this.planeX - p * p * 110;                               // gathering speed down the runway
-          const lift = Math.max(0, (p - 0.5) / 0.5);
-          P.position.y = lift * lift * 30;                                     // wheels leave the ground halfway
-          P.rotation.z = -0.2 * smooth(0.42, 0.6, p) + 0.08 * smooth(0.8, 1, p);   // nose up at rotation, then settle into the climb
+        this.tl.add(4.6, 0.01, null, () => sound.horn());
+        // the three of them come out on deck to wave goodbye as she sails
+        this.tl.add(4.9, 0.01, null, () => {
+          const d = ship.userData.deck;
+          [this.parents[0], b, this.parents[1]].forEach((o, i) => {
+            ship.add(o); o.position.set(d.x - 2.4 + i * 2.4, d.y, d.z); o.rotation.set(0, 0, 0); o.visible = true;
+          });
+          this.parents.forEach(p => { p.userData.mode = 'wave'; });
+          E.stage = 'sail'; E.sail = 0;
         });
-        this.tl.add(10.0, 0.01, null, () => this.app.levelComplete(this.result()));
+        this.tl.add(8.6, 0.01, null, () => sound.horn());
+        const X = this.shipX;
+        const Z = this.shipZ;
+        this.tl.add(5.4, 7.2, p => {
+          // gathering way, and turning her bow out to sea
+          ship.position.x = X - p * p * 110;
+          ship.position.z = Z - p * p * 70;
+          ship.rotation.y = -0.45 * p * p;
+        });
+        this.tl.add(12.4, 0.01, null, () => this.app.levelComplete(this.result()));
         E.cam = true;
         E.camFrom = this.camera.position.clone();
       }
@@ -476,16 +500,18 @@ export class Level1 {
     if (E.cam) {
       E.ct = (E.ct || 0) + dt;
       const p = Math.min(1, E.ct / 1.5), e = ease.inOut(p);
-      if (E.stage !== 'takeoff') {
+      if (E.stage !== 'sail') {
         // swing round to watch Relu climb up to Mom and Dad at the door
         this.camera.position.lerpVectors(E.camFrom, new THREE.Vector3(-7.5, 5.6, A.position.z + 13), e);
         this.camera.lookAt(0.4, 3.9, A.position.z - 0.6);
       } else {
-        // then follow the plane down the runway and up into the sky
-        const P = this.plane.position;
-        const want = new THREE.Vector3(P.x + 26, 6 + P.y * 0.75, A.position.z + 38);
-        this.camera.position.lerp(want, Math.min(1, dt * 1.6));
-        this.camera.lookAt(P.x - 5, 3.5 + P.y, A.position.z - 4.75);
+        // first close on the family at the rail, then pull back along the quay as the ship draws away
+        E.sail += dt;
+        const d = ship.userData.deck, q = ease.inOut(Math.min(1, E.sail / 7));
+        const x = ship.position.x + d.x, y = d.y, z = A.position.z + ship.position.z + d.z;
+        const want = new THREE.Vector3(x + 3 + q * 34, y + 1 + q * 7, A.position.z + this.shipZ + d.z + 13 + q * 24);
+        this.camera.position.lerp(want, Math.min(1, dt * 2.2));
+        this.camera.lookAt(x + q * 14, y + 1.2 + q * 2, z);
       }
     }
   }
