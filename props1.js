@@ -78,7 +78,7 @@ const stampTex = (hue, label) => canvasTex(128, 152, (g, w, h) => {
   g.fillStyle = hue; g.fillRect(14, 14, w - 28, h - 28);
   g.fillStyle = '#fffdf4'; g.font = 'bold 22px Courier Prime, monospace'; g.textAlign = 'center';
   g.fillText(label, w / 2, 44);
-  g.font = '50px serif'; g.fillText('✈', w / 2, 102);
+  g.font = '50px serif'; g.fillText('⚓', w / 2, 102);
   g.font = 'bold 18px Courier Prime, monospace'; g.fillText('1958', w / 2, 128);
 });
 const signTex = (lines, bg = '#1f4e9c') => canvasTex(512, 192, (g, w, h) => {
