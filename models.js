@@ -3,7 +3,6 @@ import { THREE, loadGltf, matte } from './engine.js';
 // Sculpted Meshy props for Level 1. Each is fitted to the game's scale (Relu, ~0.9 m, is 1.8 units tall):
 // `h` fits the height, `l` fits the longest horizontal side; `rot` turns the model so its front faces +z.
 const SPECS = {
-  ship:     { l: 80 },
   suitcase: { l: 0.9 },
   teddy:    { h: 0.9 },
   piano:    { h: 2.5 },

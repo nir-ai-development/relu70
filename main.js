@@ -24,7 +24,7 @@ const only = id => SCREENS.forEach(s => show(s, s === id));
 // `load` lists the sculpted props and rigged people each level needs; they download when it's opened
 const LEVELS = [
   { yr: '1958', name: 'בורחים לישראל', img: 'era1_toddler', ready: true, make: app => new Level1(app),
-    load: { models: ['ship', 'suitcase', 'teddy', 'piano', 'armchair', 'goose', 'houseA', 'houseB', 'tree', 'barrel', 'cart', 'lamp', 'bed', 'window',
+    load: { models: ['suitcase', 'teddy', 'piano', 'armchair', 'goose', 'houseA', 'houseB', 'tree', 'barrel', 'cart', 'lamp', 'bed', 'window',
       'openCase', 'bottle', 'blanket', 'terminal', 'luggageCart'], figures: ['mom', 'dad'] },
     story: {
       date: 'פיאטרה נמץ, רומניה · 7.7.1958',

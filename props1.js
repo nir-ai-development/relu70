@@ -430,23 +430,158 @@ export function makeLandscape() {
 }
 
 // ---------- the port ----------
-// the ship lies with its bow to -x; the boarding door is in its near side. Returns a group with the waterline at y = 0.
+// the ship lies with its bow to -x; the boarding door is in its near side. Built from clean shapes (an AI-made
+// model fell apart when seen this close), with the waterline at y = 0 and x running from -40 (bow) to 40 (stern).
 export function makeShip() {
   const g = new THREE.Group();
-  const m = model('ship') || handBuiltShip();
+  const m = buildLiner();
   g.add(m);
-  const size = new THREE.Box3().setFromObject(m).getSize(new THREE.Vector3());
-  m.position.y -= WATERLINE * size.y;
   fitDoor(g, m);
   const smoke = makeSmoke(); smoke.position.copy(g.userData.funnel); g.add(smoke);
   g.userData.smoke = smoke;
   return g;
 }
-function handBuiltShip() {
+const SHIP_L = 80, SHIP_BEAM = 6.5, SHIP_KEEL = -1.5;
+// the hull's half-width at u (0 bow, 1 stern) and height y: a sharp bow, a rounded stern, and sides that tuck in below
+const hullWidth = u => {
+  if (u < 0.3) { const k = u / 0.3; return SHIP_BEAM * Math.pow(1 - (1 - k) * (1 - k), 0.75); }
+  if (u > 0.86) { const k = (u - 0.86) / 0.14; return SHIP_BEAM * Math.sqrt(Math.max(0, 1 - k * k * 0.92)); }
+  return SHIP_BEAM;
+};
+// the deck line: level amidships, sweeping up to the bow and a little to the stern
+const hullTop = u => 7 + 3 * Math.pow(Math.max(0, 1 - u / 0.4), 2) + 0.8 * Math.pow(Math.max(0, (u - 0.7) / 0.3), 2);
+const hullZ = (u, y) => hullWidth(u) * (0.8 + 0.2 * Math.sqrt(Math.max(0, (y - SHIP_KEEL) / (hullTop(u) - SHIP_KEEL))));
+// the bow leans forward towards the deck
+const hullX = (u, y) => -SHIP_L / 2 + u * SHIP_L - 3.5 * Math.max(0, (y - SHIP_KEEL) / 10) * Math.pow(Math.max(0, 1 - u / 0.14), 2);
+// one colour band of the hull, on both sides, between two heights given as functions of u
+function hullBand(y0, y1, mat) {
+  const nu = 72, nv = 4, pos = [], idx = [], g = new THREE.Group();
+  for (const side of [1, -1]) {
+    const start = pos.length / 3;
+    for (let i = 0; i <= nu; i++) for (let j = 0; j <= nv; j++) {
+      const u = i / nu, y = y0(u) + (y1(u) - y0(u)) * j / nv;
+      pos.push(hullX(u, y), y, side * hullZ(u, y));
+    }
+    for (let i = 0; i < nu; i++) for (let j = 0; j < nv; j++) {
+      const a = start + i * (nv + 1) + j, b = a + nv + 1;
+      if (side > 0) idx.push(a, b, a + 1, b, b + 1, a + 1); else idx.push(a, a + 1, b, b, a + 1, b + 1);
+    }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setIndex(idx); geo.computeVertexNormals();
+  g.add(mesh(geo, mat));
+  return g;
+}
+// the same thing many times: dots of one shape along a side of the ship
+function repeated(geo, mat, spots, rotateY = 0) {
+  const im = new THREE.InstancedMesh(geo, mat, spots.length), o = new THREE.Object3D();
+  spots.forEach((p, i) => { o.position.set(p[0], p[1], p[2]); o.rotation.set(0, p[2] < 0 ? Math.PI + rotateY : rotateY, 0); o.updateMatrix(); im.setMatrixAt(i, o.matrix); });
+  im.castShadow = false;
+  return im;
+}
+// a deckhouse: flat-sided with a rounded front and back, walled from y0 to y1
+function deckhouse(x0, x1, halfZ, y0, y1, mat) {
+  const r = halfZ * 0.9, sh = new THREE.Shape();
+  sh.moveTo(x0 + r, -halfZ); sh.lineTo(x1 - r, -halfZ);
+  sh.quadraticCurveTo(x1, -halfZ, x1, 0); sh.quadraticCurveTo(x1, halfZ, x1 - r, halfZ);
+  sh.lineTo(x0 + r, halfZ);
+  sh.quadraticCurveTo(x0, halfZ, x0, 0); sh.quadraticCurveTo(x0, -halfZ, x0 + r, -halfZ);
+  const geo = new THREE.ExtrudeGeometry(sh, { depth: y1 - y0, bevelEnabled: false, curveSegments: 10 });
+  geo.rotateX(-Math.PI / 2);
+  return mesh(geo, mat, 0, y0, 0);
+}
+function buildLiner() {
   const g = new THREE.Group();
-  g.add(mesh(new THREE.BoxGeometry(80, 12, 11), paint(0x1d2740, { roughness: 0.6 }), 0, 6, 0));
-  g.add(mesh(new THREE.BoxGeometry(56, 6, 9), paint(0xf1ece0, { roughness: 0.6 }), 2, 15, 0));
-  g.add(mesh(new THREE.CylinderGeometry(2.2, 2.4, 9, 20), paint(0xe9d9a8, { roughness: 0.6 }), 0, 22, 0));
+  const white = paint(0xf4efe4, { roughness: 0.55 }), navy = paint(0x1b2a4a, { roughness: 0.5 }), red = paint(0xa52a25, { roughness: 0.6 });
+  const wood = paint(0xc09a6a, { roughness: 0.8 }), cream = paint(0xeeddaa, { roughness: 0.5 }), blue = paint(0x2a5fa8, { roughness: 0.5 });
+  const black = paint(0x202225, { roughness: 0.6 }), glass = paint(0x22334f, { roughness: 0.15, metalness: 0.4 }), brass = paint(0xc9a659, { roughness: 0.35, metalness: 0.6 });
+  const steel = paint(0x8d939a, { roughness: 0.5, metalness: 0.3 });
+  // the hull: red below the water's edge, navy sides, a thin white line above the red and a white top strake
+  const top = hullTop, c = v => () => v;
+  g.add(hullBand(c(SHIP_KEEL), c(0.45), red));
+  g.add(hullBand(c(0.45), c(0.6), white));
+  g.add(hullBand(c(0.6), u => top(u) - 0.8, navy));
+  g.add(hullBand(u => top(u) - 0.8, top, white));
+  // the deck, closing the top of the hull
+  const pos = [], idx = [], nu = 72;
+  for (let i = 0; i <= nu; i++) {
+    const u = i / nu, y = top(u), x = hullX(u, y), z = hullZ(u, y);
+    pos.push(x, y - 0.02, -z, x, y - 0.02, z);
+    if (i < nu) { const a = i * 2; idx.push(a, a + 1, a + 2, a + 2, a + 1, a + 3); }
+  }
+  const deckGeo = new THREE.BufferGeometry();
+  deckGeo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); deckGeo.setIndex(idx); deckGeo.computeVertexNormals();
+  const deck = mesh(deckGeo, paint(0xc09a6a, { roughness: 0.8, side: THREE.DoubleSide })); g.add(deck);
+  // bulwark rail along both sides of the hull
+  const postGeo = new THREE.CylinderGeometry(0.05, 0.05, 0.9, 6), posts = [];
+  for (let i = 1; i < nu; i++) {
+    const u = i / nu, y = top(u), x = hullX(u, y), z = hullZ(u, y) - 0.08;
+    if (u < 0.26 || u > 0.78) for (const sd of [1, -1]) posts.push([x, y + 0.45, sd * z]);
+  }
+  g.add(repeated(postGeo, steel, posts));
+  // hull portholes, sitting on the curve of the side
+  const holes = [], rings = [];
+  for (let x = -30; x <= 34; x += 2.6) {
+    const u = (x + SHIP_L / 2) / SHIP_L, y = 3.9;
+    for (const sd of [1, -1]) { holes.push([x, y, sd * (hullZ(u, y) + 0.05)]); rings.push([x, y, sd * (hullZ(u, y) + 0.03)]); }
+  }
+  g.add(repeated(new THREE.CircleGeometry(0.3, 16), glass, holes));
+  g.add(repeated(new THREE.RingGeometry(0.28, 0.4, 16), brass, rings));
+  // three decks of cabins, stepping in as they rise
+  const H1 = 7, H2 = 10, H3 = 12.6, H4 = 15.2;
+  g.add(deckhouse(-22, 30, 5.6, H1, H2, white));
+  g.add(deckhouse(-22.4, 30.4, 5.95, H2, H2 + 0.16, wood));
+  g.add(deckhouse(-17, 22, 4.1, H2, H3, white));
+  g.add(deckhouse(-17.3, 22.3, 4.45, H3, H3 + 0.14, wood));
+  g.add(deckhouse(-19, -9, 3.6, H3, H4, white));
+  g.add(deckhouse(-19.3, -8.7, 3.9, H4, H4 + 0.15, steel));
+  // their windows: round on the lower deck, wide panes above, the bridge's band across the front
+  const win = [], win2 = [];
+  for (let x = -17; x <= 25; x += 2.2) for (const sd of [1, -1]) win.push([x, H1 + 1.5, sd * 5.63]);
+  for (let x = -12; x <= 18; x += 2.2) for (const sd of [1, -1]) win2.push([x, H2 + 1.35, sd * 4.13]);
+  g.add(repeated(new THREE.CircleGeometry(0.42, 16), glass, win));
+  g.add(repeated(new THREE.PlaneGeometry(1.5, 1.1), glass, win2));
+  const bridge = []; for (let x = -16; x <= -11; x += 1.25) for (const sd of [1, -1]) bridge.push([x, H3 + 1.5, sd * 3.63]);
+  g.add(repeated(new THREE.PlaneGeometry(1, 1), glass, bridge));
+  const front = mesh(new THREE.BoxGeometry(0.1, 0.95, 4.4), glass, -19.02, H3 + 1.5, 0); front.castShadow = false; g.add(front);
+  // railings round the open decks, with room left at the door's side for the family to stand
+  const rail = (x0, x1, z, y, ph = 1.05) => {
+    const spots = []; for (let x = x0; x <= x1; x += 1.3) spots.push([x, y + ph / 2, z]);
+    g.add(repeated(new THREE.CylinderGeometry(0.04, 0.04, ph, 6), steel, spots));
+    const bar = mesh(new THREE.BoxGeometry(x1 - x0, 0.07, 0.07), steel, (x0 + x1) / 2, y + ph, z); bar.castShadow = false; g.add(bar);
+    const mid = mesh(new THREE.BoxGeometry(x1 - x0, 0.05, 0.05), steel, (x0 + x1) / 2, y + ph * 0.55, z); mid.castShadow = false; g.add(mid);
+  };
+  for (const sd of [1, -1]) { rail(-20, 28, sd * 5.7, H2 + 0.16); rail(-15, 20, sd * 4.2, H3 + 0.14); }
+  // lifeboats in white, on davits, along the top deck
+  const boatGeo = new THREE.SphereGeometry(1, 18, 10); boatGeo.scale(2.2, 0.55, 0.75);
+  for (const sd of [1, -1]) for (const x of [-13, 6, 11.5, 17]) {
+    const b = mesh(boatGeo, white, x, H3 + 1.15, sd * 3.1); g.add(b);
+    g.add(mesh(new THREE.BoxGeometry(4.2, 0.06, 1.3), wood, x, H3 + 1.2, sd * 3.1));
+    for (const dx of [-1.7, 1.7]) g.add(mesh(new THREE.BoxGeometry(0.1, 1.5, 0.1), steel, x + dx, H3 + 0.85, sd * 3.75));
+  }
+  // the funnel: cream, a blue band, a black cap, leaning back a touch
+  const funnel = new THREE.Group(); funnel.position.set(-2, H3, 0); funnel.rotation.z = -0.07;
+  const fg = (y0, y1, m) => { const f = mesh(new THREE.CylinderGeometry(2.05, 2.15, y1 - y0, 28), m, 0, (y0 + y1) / 2, 0); f.scale.z = 0.75; funnel.add(f); };
+  fg(0, 5.2, cream); fg(5.2, 6.2, blue); fg(6.2, 7.2, cream); fg(7.2, 7.8, black);
+  g.add(funnel);
+  // ventilators, masts with crosstrees, and the stays between them
+  for (const [x, z] of [[-6.5, 2.2], [-6.5, -2.2], [3.5, 2.2], [3.5, -2.2]]) {
+    g.add(mesh(new THREE.CylinderGeometry(0.28, 0.28, 1.4, 10), white, x, H3 + 0.8, z));
+    const cowl = mesh(new THREE.SphereGeometry(0.45, 12, 8), black, x, H3 + 1.6, z); cowl.scale.y = 0.8; g.add(cowl);
+  }
+  const line = (a, b) => { const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(...a), new THREE.Vector3(...b)]), new THREE.LineBasicMaterial({ color: 0x4a4e55 })); g.add(l); };
+  const mast = (x, base, h) => {
+    g.add(mesh(new THREE.CylinderGeometry(0.1, 0.22, h, 10), steel, x, base + h / 2, 0));
+    g.add(mesh(new THREE.BoxGeometry(0.14, 0.14, 4.4), steel, x, base + h * 0.72, 0));
+  };
+  mast(-27, top(13 / 80), 19); mast(27, H3, 15);
+  line([-27, top(13 / 80) + 19, 0], [-39.5, top(0) + 0.1, 0]);
+  line([-27, top(13 / 80) + 19, 0], [27, H3 + 15, 0]);
+  line([27, H3 + 15, 0], [39, top(1) + 0.1, 0]);
+  // anchor-winch and hatches on the foredeck and afterdeck
+  g.add(mesh(new THREE.BoxGeometry(2.2, 0.9, 3), steel, -31, top(9 / 80) + 0.4, 0));
+  g.add(mesh(new THREE.BoxGeometry(4, 0.7, 4.6), wood, -25, top(15 / 80) + 0.3, 0));
+  g.add(mesh(new THREE.BoxGeometry(4, 0.7, 4.6), wood, 34, top(74 / 80) + 0.3, 0));
   return g;
 }
 // grey puffs that rise from the funnel, swell and fade, over and over; call update(dt) each frame
@@ -508,9 +643,10 @@ function makeHullDoor(W, y0, y1, surf) {
   return g;
 }
 
-// the door's centre as a fraction of the length from the bow, its sill and height above the water; the waterline
-// as a fraction of the model's height; the funnel as a fraction of the length; how far in from the side the deck rail stands
-const DOOR_ALONG = 0.42, DOOR_Y = 3.0, DOOR_H = 3.4, WATERLINE = 0.093, FUNNEL_ALONG = 0.475, RAIL_IN = 1.2;
+// the door's centre as a fraction of the length from the bow, its sill and height above the water;
+// how far in from the deck's edge the family stands at the rail
+const DOOR_ALONG = 0.42, DOOR_Y = 2.9, DOOR_H = 3.3, RAIL_IN = 0.55;
+const FUNNEL_TOP = new THREE.Vector3(-1.45, 20.4, 0);
 // measure the hull at the door and fit a working door to it. userData gets: door (its hinge), doorAt (the sill's
 // centre on the skin), side (the hull's furthest z), funnel (its top), deck (a spot on the open deck above the door)
 function fitDoor(g, m) {
@@ -531,12 +667,11 @@ function fitDoor(g, m) {
     return rows[rows.length - 1][1];
   };
   const door = makeHullDoor(0.62 * DOOR_H, y0, y1, surf); door.position.x = x; g.add(door);
-  const fx = box.min.x + FUNNEL_ALONG * L;
-  const deckZ = surf(y1) - RAIL_IN, deckAt = hit(new V(x + 3, box.max.y + 5, deckZ), new V(0, -1, 0));
+  const deckZ = 5.6 + 0.1 - RAIL_IN, deckAt = hit(new V(x + 3, box.max.y + 5, deckZ), new V(0, -1, 0));
   g.userData.door = door.userData.leaf;
   g.userData.doorAt = new V(x, y0, surf(y0));
   g.userData.side = box.max.z;
-  g.userData.funnel = hit(new V(fx, box.max.y + 5, 0), new V(0, -1, 0)) || new V(fx, box.max.y, 0);
+  g.userData.funnel = FUNNEL_TOP.clone();
   g.userData.deck = new V(x + 3, deckAt ? deckAt.y : y1 + 2, deckZ);
 }
 export const DOOR_OPEN = 2.85;
