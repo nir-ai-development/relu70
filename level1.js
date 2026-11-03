@@ -1,4 +1,5 @@
 import { THREE, paint, mesh, canvasTex, Timeline, ease, sound } from './engine.js';
+import { skyEnvironment, rippleNormals } from './gfx.js';
 import { makeBabyRelu, makeAdult, makeFigure, makeSuitcase } from './character.js';
 import {
   buildRoom, makeOpenCase, makeTeddy, makeBottle, makeBlanket, makeCertificate, makePhotoFrame, makePiano, makeArmchair, makeGoose,
@@ -31,7 +32,8 @@ export class Level1 {
     this.paused = false;
     this.aspect = 1;
 
-    this.scene.add(new THREE.HemisphereLight(0xfff4e0, 0x6a5a48, 1.15));
+    this.look = { exposure: 0.86, bloom: [0.14, 0.5, 1.25] };
+    this.hemi = new THREE.HemisphereLight(0xfff4e0, 0x6a5a48, 0.95); this.scene.add(this.hemi);
     // warm key light with a tight soft shadow box that follows Relu
     const sun = this.sun = new THREE.DirectionalLight(0xffe9cc, 2.6); sun.position.set(4, 10, 6);
     sun.castShadow = true;
@@ -171,7 +173,11 @@ export class Level1 {
     this.scene.add(W);
     this.scene.background = new THREE.Color(0xf3dcc0);
     this.scene.fog = new THREE.Fog(0xdde3e0, 70, 330);
-    this.sun.position.set(4, 10, 6); this.sun.intensity = 2.6;
+    this.sun.position.set(4, 10, 6); this.sun.intensity = 3;
+    // the open air: reflections and ambient light from the sky, the shadows clearer than in the room
+    this.envTarget ||= skyEnvironment({ top: '#3a86dc', mid: '#a6d3f2', horizon: '#f6efe0', sunDir: [4, 10, 6], sunColor: '#fff4d8' }, 0x9c9484);
+    this.scene.environment = this.envTarget.texture;
+    this.hemi.intensity = 0.6;
 
     const land = this.land = makeLandscape();
     W.add(land);
@@ -401,12 +407,9 @@ export class Level1 {
     const concrete = concreteTex(); concrete.repeat.set(16, 4);
     const quay = mesh(new THREE.PlaneGeometry(200, depth), paint(0xffffff, { map: concrete, roughness: 0.9 }), 0, 0.05, edge + depth / 2); quay.rotation.x = -Math.PI / 2; quay.castShadow = false; A.add(quay);
     A.add(mesh(new THREE.BoxGeometry(200, 0.1, 0.5), paint(0x4d4a45, { roughness: 0.9 }), 0, 0.08, edge + 0.25));
-    const water = this.waterTex = canvasTex(256, 256, (g, w, h) => {
-      g.fillStyle = '#2f7f9e'; g.fillRect(0, 0, w, h);
-      g.strokeStyle = 'rgba(255,255,255,.28)'; g.lineWidth = 3;
-      for (let i = 0; i < 26; i++) { g.beginPath(); const x = Math.random() * w, y = Math.random() * h; g.moveTo(x, y); g.bezierCurveTo(x + 20, y - 14, x + 40, y + 12, x + 64, y); g.stroke(); }
-    }, [45, 25]);
-    const sea = mesh(new THREE.PlaneGeometry(1200, 600), paint(0xffffff, { map: water, roughness: 0.25, metalness: 0.1 }), 0, 0, edge - 300); sea.rotation.x = -Math.PI / 2; sea.castShadow = false; A.add(sea);
+    // the harbour: deep water that catches the sky on its ripples
+    const water = this.waterTex = rippleNormals([90, 45]);
+    const sea = mesh(new THREE.PlaneGeometry(1200, 600), new THREE.MeshStandardMaterial({ color: 0x14586f, normalMap: water, normalScale: new THREE.Vector2(0.55, 0.55), roughness: 0.16, metalness: 0, envMapIntensity: 1.35 }), 0, 0, edge - 300); sea.rotation.x = -Math.PI / 2; sea.castShadow = false; A.add(sea);
     for (let x = -46; x <= 46; x += 11.5) if (Math.abs(x) > 3) { const b = makeBollard(); b.position.set(x, 0.05, edge + 0.8); A.add(b); }
     const stairs = this.stairs = makeStairs(); stairs.scale.setScalar(k); stairs.position.set(0, 0, -0.1); A.add(stairs);
     const small = o => { o.scale.setScalar(0.8); return o; };   // the hand-built fallbacks are oversized
@@ -437,7 +440,7 @@ export class Level1 {
     ship.userData.smoke.userData.update(dt);
     ship.position.y = Math.sin(this.t * 0.9) * 0.06;
     ship.rotation.x = Math.sin(this.t * 0.7) * 0.004;
-    this.waterTex.offset.x += dt * 0.02;
+    this.waterTex.offset.x += dt * 0.05; this.waterTex.offset.y += dt * 0.03;
     // stairs foot is at A.z + 3.9; stop the world so the baby stops just in front of it
     const S = this.stair, remaining = -(A.position.z + S.foot) - 0.5;
     // Mom and Dad wait at the door and wave to Relu now and then (one wave each, out of step), not nonstop
@@ -564,5 +567,5 @@ export class Level1 {
     if (this.babyMode !== 'none') this.baby.userData.animate(this.t, this.babyMode, this.speed ? Math.max(0.7, this.speed / 12) : 1);
   }
 
-  dispose() { disposeTree(this.scene); }
+  dispose() { disposeTree(this.scene); this.envTarget?.dispose(); this.waterTex?.dispose(); }
 }

@@ -1,4 +1,5 @@
 import { THREE, paint, mesh, canvasTex, makeSky, Timeline, sound } from './engine.js';
+import { skyEnvironment, plasterSet, cloudSprite } from './gfx.js';
 import { makeFigure } from './character.js';
 import { model } from './models.js';
 
@@ -10,12 +11,8 @@ const LANES = [-2.6, 0, 2.6];
 const GOAL = 560;            // meters of course
 const GRAVITY = 34, JUMP_V = 12.5;
 const SLIDE_T = 0.75;        // seconds a crawl lasts
+const CRAWL_HAND = new THREE.Vector3();
 
-const sandTex = () => canvasTex(256, 256, (g, w, h) => {
-  g.fillStyle = '#d9b98a'; g.fillRect(0, 0, w, h);
-  for (let i = 0; i < 2600; i++) { const v = 150 + Math.random() * 70; g.fillStyle = `rgba(${v + 40},${v + 15},${v - 30},.35)`; g.fillRect(Math.random() * w, Math.random() * h, 2, 2); }
-  for (let i = 0; i < 14; i++) { g.strokeStyle = 'rgba(150,110,70,.18)'; g.lineWidth = 3; g.beginPath(); const y = Math.random() * h; g.moveTo(0, y); g.bezierCurveTo(w * 0.3, y - 10, w * 0.7, y + 10, w, y); g.stroke(); }
-}, [3, 60]);
 const trackTex = () => canvasTex(128, 256, (g, w, h) => {
   g.fillStyle = '#b89466'; g.fillRect(0, 0, w, h);
   for (let i = 0; i < 1600; i++) { const v = 120 + Math.random() * 60; g.fillStyle = `rgba(${v + 30},${v + 5},${v - 30},.4)`; g.fillRect(Math.random() * w, Math.random() * h, 2, 2); }
@@ -115,15 +112,29 @@ export class Level4 {
 
     this.scene.background = new THREE.Color(0xf0dcc0);
     this.scene.fog = new THREE.Fog(0xf0dcc0, 80, 300);
-    this.scene.add(makeSky({ top: '#3f7fd0', mid: '#a9cfee', horizon: '#f6e2c0', sunDir: [0.4, 0.5, -1], sunColor: '#fff6dc', radius: 320 }));
-    this.scene.add(new THREE.HemisphereLight(0xfff4dc, 0x9c7a50, 1.2));
-    const sun = this.sun = new THREE.DirectionalLight(0xfff0d0, 2.6); sun.position.set(5, 12, 6);
+    const SKY = { top: '#2f73cc', mid: '#9cc8ec', horizon: '#f6e2c0', sunDir: [0.4, 0.5, -1], sunColor: '#fff6dc', radius: 320 };
+    this.scene.add(makeSky(SKY));
+    this.look = { exposure: 0.8, bloom: [0.14, 0.5, 1.5] };
+    this.envTarget = skyEnvironment(SKY, 0xc9a874);
+    this.scene.environment = this.envTarget.texture;
+    this.sandSet = plasterSet({ rgb: [214, 182, 134], vary: 18, bump: 3, speck: 14, repeat: [3, 60], seed: 8 });
+    this.clouds = [41, 42, 43].map((seed, i) => { const c = cloudSprite(seed); c.scale.set(150 + i * 30, 42, 1); c.position.set(-150 + i * 150, 70 + i * 10, -285); this.scene.add(c); return c; });
+    this.scene.add(new THREE.HemisphereLight(0xfff4dc, 0x9c7a50, 0.65));
+    const sun = this.sun = new THREE.DirectionalLight(0xfff0d0, 3.3); sun.position.set(5, 12, 6);
     sun.castShadow = true; sun.shadow.mapSize.set(1024, 1024);
     Object.assign(sun.shadow.camera, { left: -9, right: 9, top: 9, bottom: -9, near: 1, far: 40 });
     sun.shadow.normalBias = 0.02; sun.shadow.radius = 3;
     this.scene.add(sun, sun.target);
 
     this.relu = makeFigure('officer', 3.5);
+    // crawling, his arms pull him along the ground, one after the other
+    if (this.relu) this.relu.userData.after = () => {
+      if (!this.crawling) return;
+      const U = this.relu.userData, w = Math.min(1, this.tilt / 1.2);
+      for (const [side, s] of [['Left', -1], ['Right', 1]]) {
+        U.reach(side, CRAWL_HAND.set(this.px + s * 0.55, 0.22, -2.0 + Math.sin(this.t * 9 + (s + 1)) * 0.5), w);
+      }
+    };
     // two of his soldiers running behind him
     this.squad = [makeFigure('soldier', 3.4), makeFigure('soldier', 3.3)].filter(Boolean);
     this.startRun();
@@ -137,8 +148,8 @@ export class Level4 {
     this.tl = new Timeline();
     this.ending = null; this.dead = false;
 
-    this.sand = sandTex();
-    const ground = mesh(new THREE.PlaneGeometry(120, 400), paint(0xffffff, { map: this.sand, roughness: 1 }), 0, 0, -150);
+    this.sand = this.sandSet.map;
+    const ground = mesh(new THREE.PlaneGeometry(120, 400), paint(0xffffff, { map: this.sand, normalMap: this.sandSet.normalMap, normalScale: new THREE.Vector2(0.8, 0.8), roughness: 1 }), 0, 0, -150);
     ground.rotation.x = -Math.PI / 2; ground.castShadow = false; W.add(ground);
     this.track = trackTex();
     const track = mesh(new THREE.PlaneGeometry(8.4, 400), paint(0xffffff, { map: this.track, roughness: 1 }), 0, 0.02, -150);
@@ -257,7 +268,7 @@ export class Level4 {
     if (!this.ending && !this.dead) this.speed = Math.min(19, 12 + this.dist / GOAL * 7);
     const dz = this.speed * dt;
     this.dist += dz;
-    this.sand.offset.y += dz * this.sand.repeat.y / 400;
+    this.sand.offset.y += dz * this.sand.repeat.y / 400; this.sandSet.normalMap.offset.y = this.sand.offset.y;
     this.track.offset.y += dz * this.track.repeat.y / 400;
     for (const o of this.scenery) { o.position.z += dz; if (o.position.z > 16) o.position.z -= this.sceneSpan; }
     for (const c of this.world.children) if (c.geometry?.type === 'CylinderGeometry' || c.geometry?.type === 'SphereGeometry') { c.position.z += dz; if (c.position.z > 12) c.position.z -= c.geometry.type === 'SphereGeometry' ? 280 : 400; }
@@ -277,20 +288,31 @@ export class Level4 {
     this.invuln = Math.max(0, this.invuln - dt);
     const R = this.relu;
     if (R) {
-      R.position.set(this.px, this.py, 0);
-      R.visible = this.invuln > 0 ? Math.floor(this.invuln * 12) % 2 === 0 : true;
-      const crawl = this.slide > 0 && this.py < 0.01;
-      // the crawl: he dives forward and slides low on his front, under the wire
-      this.tilt = (this.tilt || 0) + ((crawl ? 1.3 : 0) - (this.tilt || 0)) * Math.min(1, dt * 16);
-      R.rotation.set(this.tilt, Math.PI, 0, 'YXZ');
-      R.userData.animate(this.t, this.ending ? this.ending.mode : this.dead ? 'idle' : this.py > 0.05 ? 'jump' : 'running');
+      R.visible = this.invuln > 0 && !this.dead ? Math.floor(this.invuln * 12) % 2 === 0 : true;
+      const crawl = this.crawling = this.slide > 0 && this.py < 0.01;
+      // the crawl: he dives forward onto his front, turned about the middle of the body so he stays over his lane;
+      // a knock pitches him forward for a moment, and the last one puts him on the ground
+      this.tilt = (this.tilt || 0) + ((crawl || this.dead ? 1.42 : 0) - (this.tilt || 0)) * Math.min(1, dt * (this.dead ? 7 : 16));
+      this.stumble = Math.max(0, (this.stumble || 0) - dt * 2.4);
+      const pitch = this.tilt + Math.sin(this.stumble * Math.PI) * 0.42, low = Math.min(1, this.tilt / 1.42);
+      R.position.set(this.px, this.py + low * 0.22, low * 1.55);
+      R.rotation.set(pitch, Math.PI, 0, 'YXZ');
+      const run = this.speed / 12;
+      if (this.ending) R.userData.animate(this.t, this.ending.mode);
+      else if (this.dead) R.userData.animate(this.t, 'idle', 0);
+      else if (this.py > 0.05) R.userData.animate(this.t, 'jump', R.userData.clipLength('jump') / 0.74, true);
+      else R.userData.animate(this.t, 'running', crawl ? 0.6 : run);
     }
     // the squad follows in his footsteps, a little behind
     for (const s of this.squad) {
       const [ox, oz] = s.userData.slot;
       const tx = this.ending ? ox * 0.55 : ox, tz = this.ending ? -0.5 : oz;
       s.position.x += (tx - s.position.x) * Math.min(1, dt * 5); s.position.z += (tz - s.position.z) * Math.min(1, dt * 3);
-      s.userData.animate(this.t + s.userData.offset, this.ending ? this.ending.squad : 'running');
+      // (they walk to their place in the line-up before they stand and cheer; they stop when he goes down)
+      const far = Math.hypot(tx - s.position.x, tz - s.position.z) > 0.25;
+      if (this.ending) s.userData.animate(this.t + s.userData.offset, far ? 'walking' : this.ending.squad);
+      else if (this.dead) s.userData.animate(this.t + s.userData.offset, 'idle');
+      else s.userData.animate(this.t + s.userData.offset, 'running', this.speed / 12);
     }
 
     for (const e of this.entities) {
@@ -333,6 +355,7 @@ export class Level4 {
     this.hearts--;
     this.invuln = 1.6;
     this.shake = 0.7;
+    this.stumble = 1;
     sound.hit();
     if (!e.wire) { e.flying = true; e.vy = 7; e.vx = (Math.random() - 0.5) * 6; }
     this.app.hud({ hearts: this.hearts });
@@ -368,6 +391,8 @@ export class Level4 {
   }
 
   dispose() {
+    this.envTarget.dispose(); this.sandSet.dispose();
+    this.clouds.forEach(c => { c.material.map.dispose(); c.material.dispose(); });
     this.scene.traverse(o => { if (o.geometry && !o.userData.keep) o.geometry.dispose(); });
   }
 }

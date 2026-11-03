@@ -1,4 +1,5 @@
 import { THREE, paint, mesh, photoTex, Timeline, ease, sound } from './engine.js';
+import { skyEnvironment } from './gfx.js';
 import { makeFigure } from './character.js';
 import { model } from './models.js';
 
@@ -32,8 +33,13 @@ const KEYS = [
 // where the piano group stands, and its turn out from the back wall
 const SET = { x: -2.0, z: -3.85, ry: -0.45 };
 
-const CAM = { posL: [3.4, 3.5, -1.5], lookL: [-3.1, 1.75, -3.2], fovL: 43, offL: 0.12,
-              posP: [3.4, 4.3, -0.2], lookP: [-3.2, 1.5, -3.2], fovP: 58, offP: 0.08 };
+// the top of the white keys and the middle of the keyboard, in the piano group's coordinates
+const KEY_Y = 1.42, KEY_Z = 0.42;
+const HAND = new THREE.Vector3();
+
+// from the bench side of the piano, so its body never hides his hands
+const CAM = { posL: [0.65, 3.4, 0.32], lookL: [-2.35, 1.7, -3.35], fovL: 44, offL: 0.12,
+              posP: [-1.14, 4.0, 0.34], lookP: [-2.35, 1.5, -3.35], fovP: 60, offP: 0.08 };
 
 // an open songbook on the piano's music rest
 function makeMusicBook() {
@@ -118,8 +124,12 @@ export class Level2 {
     this.phase = 'ready';
     this.music = false;   // the song is the music
 
-    this.scene.add(new THREE.HemisphereLight(0xfff1dc, 0x6a5a48, 1.15));
-    const sun = this.sun = new THREE.DirectionalLight(0xffe2bc, 1.8); sun.position.set(3, 11, 8);
+    this.look = { exposure: 0.88, bloom: [0.22, 0.6, 1.2] };
+    // reflections from the room itself: warm stone, with the bright window on one side
+    this.envTarget = skyEnvironment({ top: '#cdb48c', mid: '#e8cf9f', horizon: '#fff0d0', sunDir: [0.6, 0.35, -0.7], sunColor: '#fff0d0' }, 0x8a6a4a);
+    this.scene.environment = this.envTarget.texture;
+    this.scene.add(new THREE.HemisphereLight(0xfff1dc, 0x6a5a48, 0.65));
+    const sun = this.sun = new THREE.DirectionalLight(0xffe2bc, 2.1); sun.position.set(3, 11, 8);
     sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); sun.shadow.radius = 4; sun.shadow.normalBias = 0.02;
     Object.assign(sun.shadow.camera, { left: -8, right: 8, top: 8, bottom: -8, near: 1, far: 30 });
     this.scene.add(sun);
@@ -151,8 +161,28 @@ export class Level2 {
       return c;
     })());
 
+    if (this.kid) this.kid.userData.after = () => this.poseHands();
+
     this.buildOverlay();
     this.startRun();
+  }
+
+  // The hands follow the music on the real keyboard: a hand plays the key that was just pressed, and
+  // otherwise moves a little with the clip. At the end they come off the keys and go up in the air.
+  poseHands() {
+    const K = this.kid.userData, set = this.set;
+    for (const [i, side] of [[0, 'Left'], [1, 'Right']]) {
+      const p = this.handAt[i], s = i ? 1 : -1;
+      const lane = this.lastLane, onThis = lane !== undefined && (lane < 2.5 ? !i : !!i);
+      const goalX = onThis ? (lane - 2) * 0.27 : s * 0.42;
+      p.x += (goalX - p.x) * 0.25;
+      const tap = onThis ? this.pressed[lane] / 0.18 : 0;
+      const y = KEY_Y + 0.11 - tap * 0.06 + Math.sin(this.t * 7 + i * 2) * 0.012 * (1 - this.joy);
+      // (the piano group's local z runs from the keys toward the bench)
+      HAND.set(p.x + s * 0.09 * this.joy, y + this.joy * 1.25, KEY_Z + this.joy * 0.25);
+      set.localToWorld(HAND);
+      K.reach(side, HAND, 1);
+    }
   }
 
   // ------------------------------------------------ the falling-notes overlay (2D canvas over the 3D view)
@@ -204,12 +234,15 @@ export class Level2 {
     this.hits = 0; this.perfects = 0;
     this.nextBeat = -COUNT_IN;
     this.pops = [];
+    this.joy = 0; this.lastLane = undefined;
+    this.handAt = [{ x: -0.42 }, { x: 0.42 }];
     this.app.hud({ stamps: 0, progress: 0 });
   }
 
   press(lane) {
     if (this.paused || this.phase !== 'run') return;
     this.pressed[lane] = 0.18;
+    this.lastLane = lane;
     let best = null, bestDt = GOOD;
     for (const n of this.notes) {
       if (n.judged || n.lane !== lane) continue;
@@ -342,9 +375,11 @@ export class Level2 {
     if (this.phase === 'run') this.updateSong(dt);
     if (this.tl) this.tl.update(dt);
     const done = this.phase === 'done';
-    // Relu plays while the song runs; the teacher nods along, then cheers when he finishes
+    // Relu sits up straight with his hands on the keys, plays while the song runs, and throws his arms up at the end;
+    // the teacher nods along, then cheers when he finishes
     const playing = this.phase === 'run' && this.songT > -BEAT;
-    if (this.kid) this.kid.userData.animate(this.t, playing ? 'piano' : 'sit');
+    if (done) this.joy = Math.min(1, (this.joy || 0) + dt * 2.4);
+    if (this.kid) this.kid.userData.animate(this.t, 'piano', playing ? 1 : 0);
     if (this.teacher) {
       this.teacher.userData.animate(this.t, done ? 'cheer' : playing ? 'listening' : 'idle');
     }
@@ -360,6 +395,7 @@ export class Level2 {
   dispose() {
     this.cv.removeEventListener('pointerdown', this.onDown);
     this.cv.remove();
+    this.envTarget.dispose();
     this.scene.traverse(o => { if (o.geometry && !o.userData.keep) o.geometry.dispose(); });
   }
 }

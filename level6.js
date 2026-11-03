@@ -1,4 +1,5 @@
 import { THREE, paint, mesh, photoTex, makeSky, Timeline, sound } from './engine.js';
+import { skyEnvironment, tileSet } from './gfx.js';
 import { makeFigure } from './character.js';
 import { model } from './models.js';
 
@@ -11,23 +12,26 @@ const PAIRS = [
   { icon: '🎵', he: 'שיר' }, { icon: '📷', he: 'תמונה' }, { icon: '💍', he: 'טבעת' },
 ];
 
-function buildPromenade() {
+function buildPromenade(own) {
   const g = new THREE.Group();
   // the stone terrace
-  const stone = paint(0xe6d3ae, { roughness: 0.95 });
-  const floor = mesh(new THREE.PlaneGeometry(30, 16), stone, 0, 0, 0); floor.rotation.x = -Math.PI / 2; floor.castShadow = false; g.add(floor);
-  for (let i = -14; i <= 14; i += 1.6) { const l = mesh(new THREE.PlaneGeometry(0.04, 16), paint(0xc9b48c), i, 0.005, 0); l.rotation.x = -Math.PI / 2; l.castShadow = false; g.add(l); }
+  // (Jerusalem stone pavers, wide enough that the terrace runs out of the picture on a wide screen)
+  const pavers = tileSet({ tiles: 3, rgb: [226, 204, 164], vary: 18, grout: '#a8946e', groutW: 6, rough: 0.55, seed: 29 });
+  for (const t of [pavers.map, pavers.normalMap, pavers.roughnessMap]) t.repeat.set(60 / 4.5, 28 / 4.5);
+  own.push(pavers);
+  const stone = new THREE.MeshStandardMaterial({ map: pavers.map, normalMap: pavers.normalMap, roughnessMap: pavers.roughnessMap, roughness: 1, envMapIntensity: 0.8 });
+  const floor = mesh(new THREE.PlaneGeometry(60, 28), stone, 0, 0, 9); floor.rotation.x = -Math.PI / 2; floor.castShadow = false; g.add(floor);
   // the balustrade along the edge, the Old City beyond it
   const rail = paint(0xdcc49a, { roughness: 0.9 });
   g.add(mesh(new THREE.BoxGeometry(30, 0.3, 0.6), rail, 0, 1.9, -5));
   g.add(mesh(new THREE.BoxGeometry(30, 0.25, 0.7), rail, 0, 0.12, -5));
   for (let x = -14.5; x <= 14.5; x += 0.7) g.add(mesh(new THREE.CylinderGeometry(0.13, 0.18, 1.65, 8), rail, x, 0.95, -5));
-  const view = new THREE.Mesh(new THREE.PlaneGeometry(64, 36), new THREE.MeshBasicMaterial({ map: photoTex('assets/jerusalem_view.jpg'), toneMapped: false, fog: false }));
-  view.position.set(0, 4, -46); g.add(view);
+  const view = new THREE.Mesh(new THREE.PlaneGeometry(150, 84), new THREE.MeshBasicMaterial({ map: photoTex('assets/jerusalem_view.jpg'), toneMapped: false, fog: false }));
+  view.position.set(0, 14, -62); g.add(view);
   // street lamps lighting up for the evening
   for (const x of [-7, 7]) {
     g.add(mesh(new THREE.CylinderGeometry(0.08, 0.12, 4.6, 8), paint(0x2c2c2c, { metalness: 0.5, roughness: 0.4 }), x, 2.3, -4.2));
-    const bulb = mesh(new THREE.SphereGeometry(0.28, 12, 8), new THREE.MeshStandardMaterial({ color: 0xfff1c8, emissive: 0xffc870, emissiveIntensity: 2.2 }), x, 4.75, -4.2);
+    const bulb = mesh(new THREE.SphereGeometry(0.28, 12, 8), new THREE.MeshStandardMaterial({ color: 0xfff1c8, emissive: 0xffc870, emissiveIntensity: 3.4 }), x, 4.75, -4.2);
     bulb.castShadow = false; g.add(bulb);
     const l = new THREE.PointLight(0xffc477, 8, 10, 1.6); l.position.set(x, 4.6, -4); g.add(l);
   }
@@ -47,7 +51,12 @@ export class Level6 {
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0xf0b88a);
     this.scene.fog = new THREE.Fog(0xf2c49a, 30, 90);
-    this.scene.add(makeSky({ top: '#5a6fb0', mid: '#e8a58a', horizon: '#ffd39a', sunDir: [-0.6, 0.12, -1], sunColor: '#ffe0a8', radius: 120 }));
+    const SKY = { top: '#5a6fb0', mid: '#e8a58a', horizon: '#ffd39a', sunDir: [-0.6, 0.12, -1], sunColor: '#ffe0a8', radius: 120 };
+    this.scene.add(makeSky(SKY));
+    this.look = { exposure: 0.84, bloom: [0.34, 0.65, 1.15] };
+    this.envTarget = skyEnvironment(SKY, 0xc9a97c);
+    this.scene.environment = this.envTarget.texture;
+    this.own = [];
     this.camera = new THREE.PerspectiveCamera(45, 1, 0.1, 300);
     this.t = 0;
     this.paused = false;
@@ -55,13 +64,13 @@ export class Level6 {
     this.phase = 'ready';
     this.music = false;
 
-    this.scene.add(new THREE.HemisphereLight(0xffe2c8, 0x7a5a50, 1.1));
+    this.scene.add(new THREE.HemisphereLight(0xffe2c8, 0x7a5a50, 0.6));
     const sun = new THREE.DirectionalLight(0xffc98f, 2.3); sun.position.set(-8, 6, -6);
     sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); sun.shadow.radius = 4; sun.shadow.normalBias = 0.02;
     Object.assign(sun.shadow.camera, { left: -8, right: 8, top: 8, bottom: -8, near: 1, far: 30 });
     this.scene.add(sun);
     const front = new THREE.DirectionalLight(0xfff0e0, 0.7); front.position.set(3, 4, 9); this.scene.add(front);
-    this.scene.add(buildPromenade());
+    this.scene.add(buildPromenade(this.own));
 
     const table = model('cafeTable');
     if (table) { table.position.set(0, 0, -3.4); this.scene.add(table); }   // where the two of them end up
@@ -186,17 +195,24 @@ export class Level6 {
     if (this.paused) return;
     this.t += dt;
     this.tl.update(dt);
-    // they drift together as the pairs are found
+    // every pair found brings them a step closer: they walk, facing each other, then turn back to chat
     const target = this.phase === 'done' ? 0 : 1 - this.found / PAIRS.length;
-    this.gap += (target - this.gap) * Math.min(1, dt * 1.5);
-    const sep = this.aspect < 1 ? 0.75 + this.gap * 1.4 : 1.0 + this.gap * 2.4;   // a phone is narrow: they start closer
-    if (this.relu) { this.relu.position.set(-sep, 0, -1.6); this.relu.userData.animate(this.t, this.phase === 'done' ? 'dance' : this.gap > 0.5 ? 'idle' : 'talk'); }
-    if (this.aline) { this.aline.position.set(sep, 0, -1.6); this.aline.userData.animate(this.t + 0.4, this.phase === 'done' ? 'dance' : this.gap > 0.5 ? 'idle' : 'sway'); }
+    const range = this.aspect < 1 ? 1.4 : 2.4, base = this.aspect < 1 ? 0.75 : 1.0;
+    const step = dt * 1.0 / range;   // about one unit a second
+    const moving = Math.abs(target - this.gap) > 0.004;
+    this.gap += THREE.MathUtils.clamp(target - this.gap, -step, step);
+    const sep = base + this.gap * range;
+    const done = this.phase === 'done';
+    const inward = moving ? 1.35 : done ? 1.0 : 0.5;
+    this.turnIn = (this.turnIn ?? 0.5) + (inward - (this.turnIn ?? 0.5)) * Math.min(1, dt * 6);
+    if (this.relu) { this.relu.position.set(-sep, 0, -1.6); this.relu.rotation.y = this.turnIn; this.relu.userData.animate(this.t, moving ? 'walk' : done ? 'dance' : this.gap > 0.5 ? 'idle' : 'talk', moving ? 0.8 : 1); }
+    if (this.aline) { this.aline.position.set(sep, 0, -1.6); this.aline.rotation.y = -this.turnIn; this.aline.userData.animate(this.t + 0.4, moving ? 'walk' : done ? 'dance' : this.gap > 0.5 ? 'idle' : 'sway', moving ? 0.8 : 1); }
     for (const h of this.hearts) { h.life -= dt; h.s.position.y += dt * 0.9; h.s.position.x += h.vx * dt; h.s.material.opacity = Math.min(1, h.life); }
     this.hearts = this.hearts.filter(h => { if (h.life > 0) return true; this.scene.remove(h.s); h.s.material.dispose(); return false; });
   }
 
   dispose() {
+    this.envTarget.dispose(); this.own.forEach(o => o.dispose());
     this.el.remove();
     this.scene.traverse(o => { if (o.geometry && !o.userData.keep) o.geometry.dispose(); });
   }

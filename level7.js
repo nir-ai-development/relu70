@@ -1,5 +1,5 @@
 import { THREE, mesh, canvasTex, makeSky, Timeline, sound } from './engine.js';
-import { rng, tileSet, foliageSet, worldBox, contactShadow, ownMaterials, skyEnvironment, cloudSprite } from './gfx.js';
+import { rng, tileSet, foliageSet, worldBox, contactShadow, ownMaterials, skyEnvironment, cloudSprite, rippleNormals } from './gfx.js';
 import { makeFigure } from './character.js';
 import { model } from './models.js';
 
@@ -16,25 +16,12 @@ const KIDS = [['karin', 2.5, 'קארין'], ['idan', 2.25, 'עידן'], ['tal', 
 const SUN = new THREE.Vector3(9, 12, -4);
 const SKY = { top: '#2a78d4', mid: '#86c3ef', horizon: '#e4f2f6', sunDir: [SUN.x, SUN.y, SUN.z], sunColor: '#fff4d8', radius: 150 };
 const WATER_Y = -0.35, W = 12, D = 8, DEPTH = 1.6, POOL_Z = 0.5;
-
-// Seamless ripples: sine waves with whole-number frequencies, so the normal map tiles
-function rippleNormals() {
-  const S = 256, rand = rng(11), waves = [];
-  for (let i = 0; i < 12; i++) waves.push([Math.ceil(rand() * 6) * (rand() < 0.5 ? -1 : 1), Math.ceil(rand() * 6), rand() * 6.28, 1 / (2 + i * 0.5)]);
-  const H = new Float32Array(S * S);
-  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
-    let h = 0; for (const [fx, fy, p, a] of waves) h += Math.sin((x * fx + y * fy) / S * 6.2832 + p) * a;
-    H[y * S + x] = h;
-  }
-  const data = new Uint8Array(S * S * 4), at = (x, y) => H[((y + S) % S) * S + ((x + S) % S)];
-  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
-    const i = (y * S + x) * 4;
-    data[i] = 127 + (at(x - 1, y) - at(x + 1, y)) * 300; data[i + 1] = 127 + (at(x, y - 1) - at(x, y + 1)) * 300; data[i + 2] = 255; data[i + 3] = 255;
-  }
-  const t = new THREE.DataTexture(data, S, S); t.wrapS = t.wrapT = THREE.RepeatWrapping;
-  t.magFilter = THREE.LinearFilter; t.minFilter = THREE.LinearMipmapLinearFilter; t.generateMipmaps = true; t.needsUpdate = true;
-  return t;
-}
+const DAD_Z = 0.9, DAD_Y = -1.25, DAD_H = 3.6;
+const CROUCH = 0.34;       // the child bends the knees before leaving the edge
+const HOLD = 1.15;         // Dad swings a caught child round once, this long
+const SWIM = 1.7, CLIMB = 0.5;
+const AXIS_Y = new THREE.Vector3(0, 1, 0), AXIS_X = new THREE.Vector3(1, 0, 0);
+const HANDS = new THREE.Vector3();
 
 // The water surface: drawn in linear light, tone mapped later with everything else.
 // Ripples bend the view; the sky and garden reflect in it, more at low angles (Fresnel); up to six splash rings spread out.
@@ -293,9 +280,9 @@ export class Level7 {
     const pool = this.pool = buildPool(sets);
     this.scene.add(pool);
 
-    this.dad = makeFigure('father', 3.6);
-    if (this.dad) { this.dad.rotation.y = Math.PI; this.scene.add(this.dad); }
-    this.kids = KIDS.map(([k, h, name]) => { const f = makeFigure(k, h); if (f) { f.userData.name = name; this.scene.add(f); } return f; }).filter(Boolean);
+    this.dad = makeFigure('father', DAD_H);
+    if (this.dad) { this.dad.rotation.y = Math.PI; this.scene.add(this.dad); this.dad.userData.after = () => this.poseDad(); }
+    this.kids = KIDS.map(([k, h, name]) => { const f = makeFigure(k, h); if (f) { f.userData.name = name; f.userData.h = h; this.scene.add(f); } return f; }).filter(Boolean);
     // where the next child will land: a ring on the water
     this.marker = mesh(new THREE.RingGeometry(0.6, 0.85, 32), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.8, depthWrite: false }));
     this.marker.rotation.x = -Math.PI / 2; this.marker.castShadow = false; this.marker.renderOrder = 3; this.scene.add(this.marker);
@@ -314,8 +301,13 @@ export class Level7 {
     this.lane = 1; this.dx = 0;
     this.jumpsDone = 0; this.caught = 0;
     this.leap = null; this.wait = 1.2;
+    this.arms = 0; this.held = null; this.spin = 0;
     // the kids wait their turn on the edge
-    this.kids.forEach((k, i) => { k.position.set(-4.5 + i * 3, 0.5, -3.9); k.rotation.y = 0; k.visible = true; k.userData.state = 'edge'; this.kidShadows[i].position.set(k.position.x, 0.515, k.position.z); });
+    this.kids.forEach((k, i) => {
+      k.userData.slot = new THREE.Vector3(-4.5 + i * 3, 0.5, -3.9);
+      k.position.copy(k.userData.slot); k.rotation.set(0, 0, 0); k.visible = true; k.userData.state = 'edge'; k.userData.st = 0;
+      this.kidShadows[i].position.set(k.position.x, 0.515, k.position.z);
+    });
     this.app.hud({ stamps: 0, progress: 0 });
   }
 
@@ -335,37 +327,111 @@ export class Level7 {
   }
 
   launch() {
-    const kid = this.kids[this.jumpsDone % this.kids.length];
+    // (the next child in line, as soon as they've swum back)
+    const kid = this.kids[this.turn = (this.jumpsDone % this.kids.length)];
+    if (kid.userData.state !== 'edge') { this.wait = 0.1; return; }
     const lane = Math.floor(Math.random() * 3);
     const flight = Math.max(0.95, FLIGHT - this.jumpsDone * 0.035);
-    this.leap = { kid, lane, t: 0, flight, from: kid.position.clone() };
+    this.leap = { kid, lane, t: -CROUCH, flight, from: kid.position.clone() };
     kid.userData.state = 'air';
     this.marker.position.set(LANES[lane], WATER_Y + 0.02, 0.6);
+    this.marker.visible = true;
     sound.tone(990, 0.08, 'triangle', 0.08);
+  }
+
+  // where the child's root sits when Dad has them at chest height, just in front of him
+  holdPoint(kid, out) {
+    const a = this.spin || 0;
+    return out.set(this.dx - Math.sin(a) * 0.6, DAD_Y + DAD_H * 0.72 - kid.userData.h * 0.55, DAD_Z - Math.cos(a) * 0.6);
   }
 
   land() {
     const J = this.leap;
     const got = this.lane === J.lane;
     this.jumpsDone++;
-    this.splash(LANES[J.lane], got ? 6 : 14);
+    this.marker.visible = false;
     if (got) {
       this.caught++;
+      this.splash(this.dx, 5);
+      J.kid.userData.state = 'held'; J.kid.userData.st = 0;
+      this.held = J.kid;
       sound.tone(880, 0.12, 'sine', 0.12); setTimeout(() => sound.tone(1320, 0.18, 'sine', 0.1), 100);
       this.app.toast(`תפסת את ${J.kid.userData.name}!`);
       this.app.hud({ stamps: this.caught });
-      this.cheer = 1.2;
       this.shake = 1;
+      this.wait = HOLD + 0.35;
     } else {
+      // a miss: a big splash, and the child goes under before swimming back
+      this.splash(LANES[J.lane], 14);
+      J.kid.userData.state = 'plunge'; J.kid.userData.st = 0; J.kid.userData.y0 = J.kid.position.y;
       sound.tone(200, 0.25, 'sawtooth', 0.05);
+      this.wait = 0.55;
     }
-    // back to the edge for another turn
-    const kid = J.kid;
-    this.tl.add(0.9, 0.01, null, () => { kid.position.copy(J.from); kid.userData.state = 'edge'; });
     this.leap = null;
-    this.wait = 0.55;
     this.app.hud({ progress: this.jumpsDone / JUMPS });
     if (this.jumpsDone >= JUMPS) this.finish();
+  }
+
+  // one child through whatever they're doing right now
+  updateKid(k, dt) {
+    const U = k.userData, h = U.h;
+    U.st += dt;
+    const swimY = WATER_Y - 0.3;
+    if (U.state === 'held') {
+      // Dad swings them up and round once, so we see them over his shoulder and then in front of him
+      const p = Math.min(1, U.st / HOLD);
+      this.spin = (p * p * (3 - 2 * p)) * Math.PI * 2;
+      this.holdPoint(k, k.position);
+      k.position.y += Math.sin(p * Math.PI) * 0.65;
+      k.rotation.set(0, this.spin, 0);
+      if (U.st >= HOLD) {
+        // let go: down into the water with a small splash
+        this.held = null; this.spin = 0;
+        this.splash(k.position.x, 3);
+        U.state = 'plunge'; U.st = 0; U.y0 = k.position.y;
+      }
+    } else if (U.state === 'plunge') {
+      // under the surface for a moment (the pool floor stops their feet)
+      const p = Math.min(1, U.st / 0.28), under = Math.max(-DEPTH + 0.05, WATER_Y - h * 0.5);
+      k.position.y = U.y0 + (under - U.y0) * p;
+      if (p >= 1) { U.state = 'swim'; U.st = 0; U.from = k.position.clone(); }
+    } else if (U.state === 'swim') {
+      // on their front, head toward the edge, back to their spot
+      const p = Math.min(1, U.st / SWIM), e = p * p * (3 - 2 * p), S = U.slot;
+      // (turned about the feet, so lying flat leaves the head and shoulders above the water)
+      const up = Math.min(1, U.st * 3.2);
+      k.position.set(U.from.x + (S.x - U.from.x) * e, U.from.y + (swimY - U.from.y) * up + Math.sin(U.st * 9) * 0.03, U.from.z + (S.z + 1.1 - U.from.z) * e);
+      k.rotation.order = 'YXZ'; k.rotation.set(1.32 * up * Math.min(1, (1 - p) * 8), Math.PI, 0);
+      if (p >= 1) { U.state = 'climb'; U.st = 0; U.from = k.position.clone(); }
+    } else if (U.state === 'climb') {
+      const p = Math.min(1, U.st / CLIMB), S = U.slot;
+      k.position.set(S.x, U.from.y + (S.y - U.from.y) * p + Math.sin(p * Math.PI) * 0.5, U.from.z + (S.z - U.from.z) * p);
+      k.rotation.set(0, Math.PI * (1 - p), 0);
+      if (p >= 1) { k.position.copy(S); k.rotation.set(0, 0, 0); U.state = 'edge'; }
+    }
+    const done = this.phase === 'done' && U.state === 'edge';
+    const mode = done ? 'cheer' : U.state === 'held' ? 'cheer' : U.state === 'air' ? 'jump' : U.state === 'swim' ? 'walk' : U.state === 'climb' || U.state === 'plunge' ? 'jump' : 'idle';
+    // the jump clip is stretched over the crouch and the flight
+    const k2 = U.state === 'air' ? k.userData.clipLength('jump') / (CROUCH + this.leap.flight) : U.state === 'swim' ? 1.3 : 1;
+    U.animate(this.t + k.position.x, mode, k2, mode === 'jump');
+  }
+
+  // Dad's arms come up toward the child he's about to catch, and close around them while he holds them
+  poseDad() {
+    const D = this.dad.userData, K = this.held || (this.leap && this.lane === this.leap.lane ? this.leap.kid : null);
+    if (this.arms <= 0.01) return;
+    const c = this.dad.position;
+    const lift = this.held ? 0 : 0.35;
+    for (const [side, s] of [['Left', -1], ['Right', 1]]) {
+      // (he faces away from the camera, down the pool)
+      if (K) {
+        K.userData.bone('Hips').getWorldPosition(HANDS);
+        const a = this.spin || 0;
+        HANDS.x += s * 0.34 * Math.cos(a); HANDS.y += lift; HANDS.z -= s * 0.34 * Math.sin(a);
+        if (!this.held) { HANDS.z = Math.max(HANDS.z, DAD_Z - 1.15); HANDS.x = c.x + s * 0.42; HANDS.y = Math.min(HANDS.y, c.y + DAD_H * 0.98); }
+      } else HANDS.set(c.x + s * 0.42, c.y + DAD_H * 0.9, DAD_Z - 0.9);
+      D.reach(side, HANDS, this.arms);
+    }
   }
 
   // droplets: one pool of additive sprites, fading to black in their vertex colours
@@ -395,16 +461,11 @@ export class Level7 {
     R.set(x, 0.6, 0);
   }
 
-  // a phone that can't keep up (main.js) trades the crisp shadows for frame rate
-  lowerQuality() {
-    this.sun.shadow.mapSize.set(1024, 1024); this.sun.shadow.map?.dispose(); this.sun.shadow.map = null;
-  }
-
   finish() {
     this.phase = 'done'; this.ending = true;
     this.marker.visible = false;
     sound.fanfare();
-    this.tl.add(3.2, 0.01, null, () => this.app.levelComplete(this.result()));
+    this.tl.add(4.2, 0.01, null, () => this.app.levelComplete(this.result()));
   }
 
   result() {
@@ -443,29 +504,39 @@ export class Level7 {
       this.camera.position.x += Math.sin(this.t * 0.37) * 0.07;
       this.camera.position.y += Math.sin(this.t * 0.51) * 0.05 + Math.sin(this.t * 46) * 0.05 * this.shake * this.shake;
     }
-    // Dad wades to his spot (waist-deep: the water hides his legs)
-    this.dx += (LANES[this.lane] - this.dx) * Math.min(1, dt * 9);
+    // Dad wades to his spot, leaning into each step (waist-deep: the water hides his legs)
+    const was = this.dx;
+    this.dx += (LANES[this.lane] - this.dx) * Math.min(1, dt * 7);
+    const vx = dt ? (this.dx - was) / dt : 0;
     if (this.dad) {
-      this.dad.position.set(this.dx, -1.25, 0.9);
-      this.cheer = Math.max(0, (this.cheer || 0) - dt);
-      this.dad.userData.animate(this.t, this.phase === 'done' ? 'cheer' : this.cheer > 0 ? 'cheer' : 'idle');
+      this.dad.position.set(this.dx, DAD_Y + Math.sin(this.t * 2.1) * 0.02, DAD_Z);
+      // lean with the wade; his arms are up as soon as a child he can reach is in the air, and while he's holding one
+      this.dad.rotation.set(0, Math.PI + (this.spin || 0), THREE.MathUtils.clamp(vx * 0.018, -0.14, 0.14));
+      const J = this.leap, ready = this.held || (J && this.lane === J.lane && J.t > J.flight * 0.3);
+      this.arms += ((ready ? 1 : 0) - this.arms) * Math.min(1, dt * 7);
+      const wading = Math.abs(vx) > 1.2;
+      this.dad.userData.animate(this.t, this.phase === 'done' ? 'cheer' : wading ? 'walk' : 'idle', wading ? 1.5 : 1);
     }
     if (this.phase === 'run') {
       if (!this.leap) { this.wait -= dt; if (this.wait <= 0 && this.kids.length) this.launch(); }
       else {
         const J = this.leap; J.t += dt;
-        const k = Math.min(1, J.t / J.flight);
-        const tx = LANES[J.lane], tz = 0.6;
-        J.kid.position.set(J.from.x + (tx - J.from.x) * k, J.from.y + Math.sin(k * Math.PI) * 4.2 - k * 1.1, J.from.z + (tz - J.from.z) * k);
-        J.kid.rotation.y = 0;
+        const k = Math.max(0, Math.min(1, J.t / J.flight));
+        // in the last third a child the player is under curves into Dad's arms
+        const tx = LANES[J.lane], tz = 0.6, c = k * k * (3 - 2 * k);
+        let x = J.from.x + (tx - J.from.x) * k, y = J.from.y + Math.sin(k * Math.PI) * 4.2 - k * 1.1, z = J.from.z + (tz - J.from.z) * k;
+        if (this.lane === J.lane && k > 0.66) {
+          const g = (k - 0.66) / 0.34, s = g * g * (3 - 2 * g);
+          this.holdPoint(J.kid, HANDS);
+          x += (HANDS.x - x) * s; y += (HANDS.y - y) * s; z += (HANDS.z - z) * s;
+        }
+        J.kid.position.set(x, y, z);
+        J.kid.rotation.set(0, 0, 0);
         this.marker.material.opacity = 0.5 + Math.sin(this.t * 10) * 0.3;
         if (k >= 1) this.land();
       }
     }
-    for (const kid of this.kids) {
-      const st = kid.userData.state;
-      kid.userData.animate(this.t + kid.position.x, this.phase === 'done' ? 'cheer' : st === 'air' ? 'jump' : 'idle');
-    }
+    for (const kid of this.kids) this.updateKid(kid, dt);
     this.kids.forEach((k, i) => { this.kidShadows[i].visible = k.userData.state === 'edge'; });
     const P = this.spray.geometry.attributes.position, C = this.spray.geometry.attributes.color;
     this.drops.forEach((d, i) => {

@@ -235,7 +235,9 @@ function applyLook(view) {
   grade.enabled = !!look;
   setSamples(look && quality.step < 1 ? Math.min(4, renderer.capabilities.maxSamples) : 0);
   setRatio(look && quality.step >= 2 ? Math.min(fullRatio, 1.15) : fullRatio);
-  if (look && quality.step >= 3) view.lowerQuality?.();
+  if (look && quality.step >= 3) view.scene.traverse(o => {
+    if (o.isLight && o.castShadow && o.shadow.mapSize.x > 1024) { o.shadow.mapSize.set(1024, 1024); o.shadow.map?.dispose(); o.shadow.map = null; }
+  });
   activeLook = view;
   quality.t = quality.frames = 0;
 }

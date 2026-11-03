@@ -1,4 +1,5 @@
 import { THREE, paint, mesh, photoTex, makeSky, Timeline, sound } from './engine.js';
+import { skyEnvironment, foliageSet, makeSparks } from './gfx.js';
 import { makeFigure } from './character.js';
 import { model } from './models.js';
 
@@ -7,6 +8,7 @@ import { model } from './models.js';
 // Confetti, fireworks, everyone cheers and "Happy Birthday" plays. Everyone who gets here gets three stars.
 
 const CANDLES = 7;
+const LEAN_AXIS = new THREE.Vector3(1, 0, 0.2).normalize();
 const PHOTOS = ['era1_toddler', 'era2_piano', 'era3_school', 'era4_soldier', 'era5_doctor', 'era6_aline', 'era7_dad', 'era8_saba'];
 // Happy Birthday: [frequency, beats]
 const N = { G4: 392, A4: 440, B4: 493.9, C5: 523.3, D5: 587.3, E5: 659.3, F5: 698.5, G5: 784 };
@@ -15,9 +17,12 @@ const SONG = [['G4', 0.75], ['G4', 0.25], ['A4', 1], ['G4', 1], ['C5', 1], ['B4'
   ['G4', 0.75], ['G4', 0.25], ['G5', 1], ['E5', 1], ['C5', 1], ['B4', 1], ['A4', 2],
   ['F5', 0.75], ['F5', 0.25], ['E5', 1], ['C5', 1], ['D5', 1], ['C5', 3]];
 
-function buildGarden() {
+function buildGarden(own) {
   const g = new THREE.Group();
-  const grass = mesh(new THREE.CircleGeometry(40, 48), paint(0x5f8f45, { roughness: 1 }));
+  const lawn = foliageSet({ dark: [44, 84, 34], light: [112, 158, 66], dabs: 2400, dab: 4, seed: 12 });
+  own.push(lawn);
+  for (const t of [lawn.map, lawn.normalMap]) t.repeat.set(14, 14);
+  const grass = mesh(new THREE.CircleGeometry(60, 48), paint(0xffffff, { map: lawn.map, normalMap: lawn.normalMap, roughness: 1 }));
   grass.rotation.x = -Math.PI / 2; grass.castShadow = false; g.add(grass);
   // the long party table with a white cloth
   const cloth = paint(0xfaf6ee, { roughness: 0.9 });
@@ -45,7 +50,7 @@ function buildGarden() {
   for (const z of [-1.5, 1.5]) {
     const c = new THREE.CatmullRomCurve3([new THREE.Vector3(-9, 6.2, z), new THREE.Vector3(0, 5.5, z), new THREE.Vector3(9, 6.2, z)]);
     for (let i = 0; i <= 24; i++) {
-      const b = mesh(new THREE.SphereGeometry(0.09, 8, 6), new THREE.MeshStandardMaterial({ color: 0xfff1c0, emissive: 0xffd27a, emissiveIntensity: 2.5 }));
+      const b = mesh(new THREE.SphereGeometry(0.09, 8, 6), new THREE.MeshStandardMaterial({ color: 0xfff1c0, emissive: 0xffd27a, emissiveIntensity: 3 }));
       b.position.copy(c.getPoint(i / 24)); b.castShadow = false; bulbs.add(b);
     }
   }
@@ -84,7 +89,12 @@ export class Level8 {
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x2c2a52);
     this.scene.fog = new THREE.Fog(0x3a3460, 30, 90);
-    this.scene.add(makeSky({ top: '#1d2150', mid: '#7a4f86', horizon: '#f2a86a', sunDir: [0.2, 0.04, -1], sunColor: '#ffcf8a', radius: 120 }));
+    const SKY = { top: '#1d2150', mid: '#7a4f86', horizon: '#f2a86a', sunDir: [0.2, 0.04, -1], sunColor: '#ffcf8a', radius: 120 };
+    this.scene.add(makeSky(SKY));
+    this.look = { exposure: 0.92, bloom: [0.42, 0.7, 1.05] };
+    this.envTarget = skyEnvironment(SKY, 0x3f5a35);
+    this.scene.environment = this.envTarget.texture;
+    this.own = [];
     this.camera = new THREE.PerspectiveCamera(45, 1, 0.1, 300);
     this.t = 0;
     this.paused = false;
@@ -92,14 +102,15 @@ export class Level8 {
     this.phase = 'ready';
     this.music = false;
 
-    this.scene.add(new THREE.HemisphereLight(0xffe0c8, 0x40385a, 0.9));
+    this.scene.add(new THREE.HemisphereLight(0xffe0c8, 0x40385a, 0.6));
     const key = new THREE.DirectionalLight(0xffd8a8, 1.6); key.position.set(4, 8, 7);
     key.castShadow = true; key.shadow.mapSize.set(2048, 2048); key.shadow.radius = 4; key.shadow.normalBias = 0.02;
     Object.assign(key.shadow.camera, { left: -9, right: 9, top: 9, bottom: -9, near: 1, far: 30 });
     this.scene.add(key);
     const warm = new THREE.PointLight(0xffc477, 14, 14, 1.5); warm.position.set(0, 5.4, 1); this.scene.add(warm);
     this.candleLight = new THREE.PointLight(0xffa040, 0, 6, 1.8); this.candleLight.position.set(0, 3.4, 0.4); this.scene.add(this.candleLight);
-    this.garden = buildGarden(); this.scene.add(this.garden);
+    this.garden = buildGarden(this.own); this.scene.add(this.garden);
+    this.sparks = makeSparks(this.scene); this.own.push(this.sparks);
 
     // the cake on the table, with its candles in a ring on top
     const cake = model('cake');
@@ -120,11 +131,14 @@ export class Level8 {
     }
 
     this.saba = makeFigure('saba', 3.5);
-    if (this.saba) { this.saba.position.set(1.5, 0, -1.7); this.saba.rotation.y = -0.25; this.scene.add(this.saba); }   // beside the cake, so it never hides his face
+    if (this.saba) {
+      this.saba.position.set(1.5, 0, -1.7); this.saba.rotation.y = -0.25; this.scene.add(this.saba);
+      // he leans in over the cake while he's blowing
+      this.saba.userData.after = () => { if (this.stage === 'blow' && this.holding) this.saba.userData.turn('Spine1', LEAN_AXIS, -0.3); };
+    }   // beside the cake, so it never hides his face
     // the grandchildren around the table
     this.kids = [['girlKid', 2.1, -2.6, 1.6, 0.5], ['boyKid', 2.4, 2.7, 1.6, -0.5], ['girlKid', 1.8, -3.9, 0.4, 0.9], ['boyKid', 1.9, 4.0, 0.3, -0.9]]
       .map(([k, h, x, z, r]) => { const f = makeFigure(k, h); if (f) { f.position.set(x, 0, z); f.rotation.y = r; this.scene.add(f); } return f; }).filter(Boolean);
-    this.parts = [];
 
     this.buildOverlay();
     this.startRun();
@@ -193,27 +207,20 @@ export class Level8 {
   }
 
   // little particles: sparks, confetti, fireworks
-  spark(at, n, cols, speed = 2.2, life = 0.8, size = 0.06) {
-    for (let i = 0; i < n; i++) {
-      const m = new THREE.Mesh(new THREE.SphereGeometry(size, 6, 4), new THREE.MeshBasicMaterial({ color: cols[i % cols.length], transparent: true }));
-      m.position.copy(at); this.scene.add(m);
-      const v = new THREE.Vector3(Math.random() - 0.5, Math.random() * 0.8 + 0.2, Math.random() - 0.5).normalize().multiplyScalar(speed * (0.5 + Math.random()));
-      this.parts.push({ m, v, life, max: life, g: speed > 4 ? 3 : 6 });
-    }
-  }
+  spark(at, n, cols, speed = 2.2, life = 0.8) { this.sparks.burst(at, n, cols, speed, life, speed > 4 ? 3 : 6); }
 
   celebrate() {
     this.stage = 'party';
     this.phase = 'done'; this.ending = true;
     this.blowBtn.style.display = 'none';
     this.app.hud({ progress: 1 });
-    for (const c of this.candles) { c.userData.flame.visible = false; this.spark(c.position.clone().add(new THREE.Vector3(0, 0.6, 0)), 4, [0xcccccc, 0x999999], 0.8, 1.2, 0.05); }
+    for (const c of this.candles) { c.userData.flame.visible = false; this.spark(c.position.clone().add(new THREE.Vector3(0, 0.6, 0)), 4, [0x777777, 0x555555], 0.8, 1.2); }
     // confetti over the table, then fireworks in the sky
     const confetti = [0xe25a5a, 0xf2c84b, 0x4f8fd6, 0x5bb36a, 0xc86ad6, 0xffffff];
-    this.tl.add(0.3, 0.01, null, () => this.spark(new THREE.Vector3(0, 4.5, 0.5), 90, confetti, 4.5, 2.6, 0.07));
+    this.tl.add(0.3, 0.01, null, () => this.spark(new THREE.Vector3(0, 4.5, 0.5), 110, confetti, 4.5, 2.6));
     for (let i = 0; i < 6; i++) this.tl.add(1 + i * 0.7, 0.01, null, () => {
       const at = new THREE.Vector3((Math.random() - 0.5) * 16, 9 + Math.random() * 4, -10 - Math.random() * 6);
-      this.spark(at, 60, [confetti[i % 6], 0xffffff], 6, 1.6, 0.1);
+      this.spark(at, 80, [confetti[i % 6], 0xffffff], 6, 1.6);
       sound.tone(180 + Math.random() * 60, 0.25, 'sawtooth', 0.05);
     });
     // Happy Birthday on the piano, then the card
@@ -260,14 +267,20 @@ export class Level8 {
     for (const b of this.garden.userData.bulbs.children) b.material.emissiveIntensity = 2.2 + Math.sin(this.t * 3 + b.position.x) * 0.4;
     // Saba waves at the grandchildren, sends a big heart while the candles are lit, then dances
     const party = this.stage === 'party';
-    if (this.saba) this.saba.userData.animate(this.t, party ? 'dance' : this.stage === 'blow' ? 'heart' : this.t % 8 > 5.5 ? 'wave' : 'idle');
-    this.kids.forEach((k, i) => k.userData.animate(this.t + i * 0.3, party ? (i % 2 ? 'jump' : 'cheer') : 'idle'));
-    for (const p of this.parts) { p.life -= dt; p.v.y -= p.g * dt; p.m.position.addScaledVector(p.v, dt); p.m.material.opacity = Math.max(0, p.life / p.max); }
-    this.parts = this.parts.filter(p => { if (p.life > 0) return true; this.scene.remove(p.m); p.m.geometry.dispose(); p.m.material.dispose(); return false; });
+    if (this.saba) this.saba.rotation.y += ((this.stage === 'blow' ? -0.75 : -0.25) - this.saba.rotation.y) * Math.min(1, dt * 4);
+    if (this.saba) this.saba.userData.animate(this.t, party ? 'dance' : this.t % 8 > 5.5 && this.stage !== 'blow' ? 'wave' : 'idle');
+    this.kids.forEach((k, i) => {
+      // two of them hop up and down while the others cheer
+      const hop = party && i % 2;
+      k.position.y = hop ? Math.abs(Math.sin(this.t * 3.4 + i)) * 0.55 : 0;
+      k.userData.animate(this.t + i * 0.3, party ? (hop ? 'idle' : 'cheer') : 'idle');
+    });
+    this.sparks.update(dt);
   }
 
   dispose() {
     for (const el of [this.hint, this.blowBtn, this.card]) el.remove();
+    this.envTarget.dispose(); this.own.forEach(o => o.dispose());
     this.scene.traverse(o => { if (o.geometry && !o.userData.keep) o.geometry.dispose(); });
   }
 }

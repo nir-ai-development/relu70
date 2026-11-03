@@ -10,7 +10,7 @@ const CLIPS = { run: 'Running', walk: 'Walking', idle: 'Idle_0', jump: 'Jump_Run
 const SCALE = 2;   // the model is 0.9 m tall; the world is built around a ~1.8-unit toddler
 let relu = null;
 
-function prepRig(gltf, jumpClip) {
+function prepRig(gltf) {
   gltf.scene.traverse(o => {
     if (!o.isMesh) return;
     matte(o.material, 0.8);   // skin keeps a hint of softness, never a plastic shine
@@ -27,7 +27,7 @@ function prepRig(gltf, jumpClip) {
       const v = tr.values, x0 = v[0], y0 = v[1], z0 = v[2];
       for (let i = 0; i < v.length; i += 3) {
         v[i] = x0; v[i + 2] = z0;
-        if (clip.name === jumpClip) v[i + 1] = y0;
+        if (/jump_run|regular_jump/i.test(clip.name)) v[i + 1] = y0;
       }
     }
   }
@@ -61,7 +61,7 @@ const figures = {}, pending = {};
 
 // toddler Relu is needed from the title screen on; everyone else loads with the level that uses them
 export async function loadCharacters(keys = []) {
-  relu ||= prepRig(await loadGltf('assets/relu_toddler.glb'), CLIPS.jump);
+  relu ||= prepRig(await loadGltf('assets/relu_toddler.glb'));
   await loadFigures(keys);
 }
 
@@ -88,21 +88,76 @@ export function makeFigure(which, height) {
   let cur = null, lastT = null;
   // someone with no idle clip stands still in the first frame of their wave (arms down) or walk instead
   const still = !clip('idle') && (clip('wave') || clip('walk'));
-  root.userData.animate = (t, mode) => {
+  // k is the clip's speed (0 holds the pose); once plays it through a single time and stays on the last frame
+  const bigWave = clip('big_wave') && !clip('idle');   // (that clip leans the whole body over; they wave one arm instead)
+  let waveW = 0;
+  root.userData.animate = (t, mode, k = 1, once = false) => {
     const dt = lastT === null ? 0 : Math.min(0.1, Math.max(0, t - lastT)); lastT = t;
+    const waving = bigWave && mode === 'wave';
+    if (waving) mode = 'idle';
+    waveW = Math.max(0, Math.min(1, waveW + (waving ? dt : -dt) * 5));
     const stand = mode === 'idle' && still;
     const c = stand ? still : clip(mode) || fallback;
     if (c && c !== cur) {
-      const next = mixer.clipAction(c).reset().play();
+      const next = mixer.clipAction(c).reset();
+      next.setLoop(once ? THREE.LoopOnce : THREE.LoopRepeat, Infinity); next.clampWhenFinished = once;
+      next.play();
       if (cur) mixer.clipAction(cur).crossFadeTo(next, 0.25, false);
       cur = c;
     }
-    if (c) { const a = mixer.clipAction(c); a.paused = stand; if (stand) a.time = 0; }
+    if (c) { const a = mixer.clipAction(c); a.paused = stand || (a.paused && once); a.timeScale = k; if (stand) a.time = 0; }
     mixer.update(dt);
+    if (waveW > 0) {
+      // the hand up beside the head, swinging from side to side
+      root.updateWorldMatrix(true, true);
+      const R = bone('RightArm'), L = bone('LeftArm');
+      R.getWorldPosition(_v1); L.getWorldPosition(_v2);
+      const unit = _v1.distanceTo(_v2);
+      _v2.subVectors(_v1, _v2).normalize();   // out through his right shoulder
+      _v1.addScaledVector(_v2, unit * (0.75 + Math.sin(t * 8) * 0.28)); _v1.y += unit * 1.55;
+      root.userData.reach('Right', _v1, waveW);
+    }
+    root.userData.after?.();   // poses laid over the clip (hands on the keys, arms around a child)
   };
   root.userData.clipLength = mode => (clip(mode) || fallback)?.duration || 1;
-  root.userData.bone = name => { let b = null; m.traverse(o => { if (!b && o.isBone && o.name.endsWith(name)) b = o; }); return b; };
+  const bones = {};
+  const bone = root.userData.bone = name => { if (bones[name] === undefined) { bones[name] = null; m.traverse(o => { if (!bones[name] && o.isBone && o.name.endsWith(name)) bones[name] = o; }); } return bones[name]; };
+  root.userData.reach = (side, target, w = 1) => reachArm(root, bone(side + 'Arm'), bone(side + 'ForeArm'), bone(side + 'Hand'), target, w);
+  // turn one bone in world space, by `angle` about a world axis (a lean, a nod)
+  root.userData.turn = (name, axis, angle) => { const b = bone(name); if (b) { root.updateWorldMatrix(true, true); rotateWorld(b, _q1.setFromAxisAngle(axis, angle)); } };
   return root;
+}
+
+// Two-bone arm solver: bend the elbow and swing the shoulder so the hand arrives at a world position.
+// Laid over the playing clip after each mixer update; `w` fades the pose in and out.
+const _a = new THREE.Vector3(), _b = new THREE.Vector3(), _c = new THREE.Vector3(), _t = new THREE.Vector3(), _ab = new THREE.Vector3(), _ac = new THREE.Vector3(), _at = new THREE.Vector3(), _n = new THREE.Vector3();
+const _v1 = new THREE.Vector3(), _v2 = new THREE.Vector3();
+const _q1 = new THREE.Quaternion(), _q2 = new THREE.Quaternion(), _q3 = new THREE.Quaternion();
+function rotateWorld(bone, q) {
+  bone.parent.getWorldQuaternion(_q2);
+  bone.getWorldQuaternion(_q3);
+  bone.quaternion.copy(_q2.invert().multiply(q).multiply(_q3));
+  bone.updateWorldMatrix(false, true);
+}
+function reachArm(root, A, B, C, target, w) {
+  if (!A || !B || !C || w <= 0) return;
+  root.updateWorldMatrix(true, true);
+  A.getWorldPosition(_a); B.getWorldPosition(_b); C.getWorldPosition(_c);
+  _t.lerpVectors(_c, target, Math.min(1, w));
+  const l1 = _a.distanceTo(_b), l2 = _b.distanceTo(_c);
+  const d = Math.min(l1 + l2 - 0.001, Math.max(Math.abs(l1 - l2) + 0.001, _a.distanceTo(_t)));
+  // the elbow first, in the plane the arm already bends in
+  _ab.subVectors(_a, _b).normalize(); _ac.subVectors(_c, _b).normalize();
+  const now = Math.acos(THREE.MathUtils.clamp(_ab.dot(_ac), -1, 1));
+  const want = Math.acos(THREE.MathUtils.clamp((l1 * l1 + l2 * l2 - d * d) / (2 * l1 * l2), -1, 1));
+  _n.crossVectors(_ac, _ab);
+  if (_n.lengthSq() < 1e-6) _n.set(1, 0, 0);
+  _n.normalize();
+  rotateWorld(B, _q1.setFromAxisAngle(_n, now - want));
+  // then the shoulder, to aim the hand at the target
+  C.getWorldPosition(_c);
+  _ac.subVectors(_c, _a).normalize(); _at.subVectors(_t, _a).normalize();
+  rotateWorld(A, _q1.setFromUnitVectors(_ac, _at));
 }
 
 export function makeBabyRelu() {

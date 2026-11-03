@@ -10,10 +10,10 @@ export { THREE };
 const matCache = new Map();
 export function paint(color, opts) {
   if (!opts) {
-    if (!matCache.has(color)) matCache.set(color, new THREE.MeshStandardMaterial({ color, roughness: 0.9, metalness: 0, envMapIntensity: 0.25 }));
+    if (!matCache.has(color)) matCache.set(color, new THREE.MeshStandardMaterial({ color, roughness: 0.9, metalness: 0, envMapIntensity: 0.6 }));
     return matCache.get(color);
   }
-  return new THREE.MeshStandardMaterial({ color, roughness: 0.9, metalness: 0, envMapIntensity: 0.25, ...opts });
+  return new THREE.MeshStandardMaterial({ color, roughness: 0.9, metalness: 0, envMapIntensity: 0.6, ...opts });
 }
 
 export function mesh(geo, mat, x = 0, y = 0, z = 0) {
@@ -28,7 +28,7 @@ export function mesh(geo, mat, x = 0, y = 0, z = 0) {
 export function matte(material, rough = 0.92) {
   material.metalness = 0; material.metalnessMap = null;
   material.roughness = rough; material.roughnessMap = null;
-  material.envMapIntensity = 0.22;
+  material.envMapIntensity = 0.55;
   if (material.normalMap) material.normalScale.set(0.6, 0.6);
   material.needsUpdate = true;
 }

@@ -99,6 +99,74 @@ export function foliageSet({ size = 256, dark = [46, 84, 34], light = [122, 164,
   return { map: texOf(col, true), normalMap: texOf(normalFromHeight(hgt, 2.5), false), dispose() { this.map.dispose(); this.normalMap.dispose(); } };
 }
 
+// plaster, sand, packed earth: soft blotches of colour and a fine bump, no tiles
+export function plasterSet({ size = 512, rgb = [235, 225, 205], vary = 16, bump = 2, speck = 10, seed = 5, repeat = [1, 1] } = {}) {
+  const rand = rng(seed), S = size;
+  const [col, g] = canvas2d(S, S), [hgt, gh] = canvas2d(S, S);
+  g.fillStyle = `rgb(${rgb})`; g.fillRect(0, 0, S, S);
+  gh.fillStyle = '#808080'; gh.fillRect(0, 0, S, S);
+  blotches(g, S, 120, S * 0.03, S * 0.16, rand, r => { const d = (r() - 0.5) * vary * 2; return `rgba(${rgb[0] + d},${rgb[1] + d},${rgb[2] + d * 0.9},.22)`; });
+  blotches(gh, S, 240, 2, S * 0.05, rand, r => { const v = r() < 0.5 ? 0 : 255; return `rgba(${v},${v},${v},${0.06 + r() * 0.14})`; });
+  speckle(g, S, speck, rand); speckle(gh, S, 26, rand);
+  const out = { map: texOf(col, true, repeat), normalMap: texOf(normalFromHeight(hgt, bump), false, repeat), dispose() { this.map.dispose(); this.normalMap.dispose(); } };
+  return out;
+}
+
+// Seamless ripples: sine waves with whole-number frequencies, so the normal map tiles
+export function rippleNormals(repeat) {
+  const S = 256, rand = rng(11), waves = [];
+  for (let i = 0; i < 12; i++) waves.push([Math.ceil(rand() * 6) * (rand() < 0.5 ? -1 : 1), Math.ceil(rand() * 6), rand() * 6.28, 1 / (2 + i * 0.5)]);
+  const H = new Float32Array(S * S);
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+    let h = 0; for (const [fx, fy, p, a] of waves) h += Math.sin((x * fx + y * fy) / S * 6.2832 + p) * a;
+    H[y * S + x] = h;
+  }
+  const data = new Uint8Array(S * S * 4), at = (x, y) => H[((y + S) % S) * S + ((x + S) % S)];
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+    const i = (y * S + x) * 4;
+    data[i] = 127 + (at(x - 1, y) - at(x + 1, y)) * 300; data[i + 1] = 127 + (at(x, y - 1) - at(x, y + 1)) * 300; data[i + 2] = 255; data[i + 3] = 255;
+  }
+  const t = new THREE.DataTexture(data, S, S); t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.magFilter = THREE.LinearFilter; t.minFilter = THREE.LinearMipmapLinearFilter; t.generateMipmaps = true; t.needsUpdate = true;
+  if (repeat) t.repeat.set(repeat[0], repeat[1]);
+  return t;
+}
+
+// Sparks, confetti, fireworks: one pool of glowing points in a single draw call
+export function makeSparks(scene, N = 700, size = 0.3) {
+  const c = document.createElement('canvas'); c.width = c.height = 32;
+  const g = c.getContext('2d'), gr = g.createRadialGradient(16, 16, 0, 16, 16, 16);
+  gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.4, 'rgba(255,255,255,.75)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = gr; g.fillRect(0, 0, 32, 32);
+  const geo = new THREE.BufferGeometry();
+  const P = new THREE.BufferAttribute(new Float32Array(N * 3), 3), C = new THREE.BufferAttribute(new Float32Array(N * 3), 3);
+  geo.setAttribute('position', P); geo.setAttribute('color', C);
+  const tex = new THREE.CanvasTexture(c);
+  const pts = new THREE.Points(geo, new THREE.PointsMaterial({ map: tex, size, vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }));
+  pts.frustumCulled = false; pts.renderOrder = 8; scene.add(pts);
+  const drops = Array.from({ length: N }, () => ({ life: 0, max: 1, g: 6, v: new THREE.Vector3(), p: new THREE.Vector3(0, -99, 0), c: new THREE.Color() }));
+  let at = 0;
+  return {
+    burst(pos, n, cols, speed = 2.2, life = 0.8, gravity = 6) {
+      for (let i = 0; i < n; i++) {
+        const d = drops[at = (at + 1) % N];
+        d.p.copy(pos);
+        d.v.set(Math.random() - 0.5, Math.random() * 0.8 + 0.2, Math.random() - 0.5).normalize().multiplyScalar(speed * (0.5 + Math.random()));
+        d.life = d.max = life * (0.7 + Math.random() * 0.5); d.g = gravity; d.c.set(cols[i % cols.length]);
+      }
+    },
+    update(dt) {
+      drops.forEach((d, i) => {
+        if (d.life > 0) { d.life -= dt; d.v.y -= d.g * dt; d.p.addScaledVector(d.v, dt); }
+        const b = d.life > 0 ? Math.min(1, d.life / d.max * 1.6) : 0;
+        P.setXYZ(i, d.p.x, d.p.y, d.p.z); C.setXYZ(i, d.c.r * b, d.c.g * b, d.c.b * b);
+      });
+      P.needsUpdate = C.needsUpdate = true;
+    },
+    dispose() { geo.dispose(); pts.material.dispose(); tex.dispose(); },
+  };
+}
+
 // a box whose texture is measured in world units, so tiles stay square on every face
 export function worldBox(w, h, d, scale = 1) {
   const geo = new THREE.BoxGeometry(w, h, d);

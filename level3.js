@@ -1,4 +1,5 @@
 import { THREE, paint, mesh, photoTex, Timeline, sound } from './engine.js';
+import { skyEnvironment, plasterSet } from './gfx.js';
 import { makeFigure } from './character.js';
 import { model } from './models.js';
 
@@ -41,13 +42,15 @@ const POOL = [
 const shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 
 // the classroom: cream plaster over mint-green paint, wooden floor, tall windows onto Jerusalem
-function buildClassroom() {
+function buildClassroom(own) {
   const room = new THREE.Group();
   const w = 13, d = 11, h = 6.4;
   const floorTex = photoTex('assets/tex_floor.jpg'); floorTex.wrapS = floorTex.wrapT = THREE.RepeatWrapping; floorTex.repeat.set(w / 3, d / 3);
-  const floor = mesh(new THREE.PlaneGeometry(w, d), paint(0xd9c0a0, { map: floorTex, roughness: 0.8 }));
+  const floor = mesh(new THREE.PlaneGeometry(w, d), paint(0xd9c0a0, { map: floorTex, roughness: 0.48 }));
   floor.rotation.x = -Math.PI / 2; floor.castShadow = false; room.add(floor);
-  const plaster = paint(0xf2e8d2, { roughness: 0.95 }), mint = paint(0xa9c9a4, { roughness: 0.85 });
+  const plasterTex = plasterSet({ rgb: [240, 230, 208], repeat: [3, 2], seed: 5 }), mintTex = plasterSet({ rgb: [162, 196, 158], vary: 12, repeat: [4, 1], seed: 6 });
+  own.push(plasterTex, mintTex);
+  const plaster = paint(0xffffff, { map: plasterTex.map, normalMap: plasterTex.normalMap, roughness: 0.95 }), mint = paint(0xffffff, { map: mintTex.map, normalMap: mintTex.normalMap, roughness: 0.5 });
   const wall = (len, x, z, ry, windows) => {
     const g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = ry; room.add(g);
     const p = mesh(new THREE.PlaneGeometry(len, h), plaster, 0, h / 2, 0); p.castShadow = false; g.add(p);
@@ -123,12 +126,16 @@ export class Level3 {
     this.phase = 'ready';
     this.music = false;
 
-    this.scene.add(new THREE.HemisphereLight(0xfff4e2, 0x6b6250, 1.2));
-    const sun = new THREE.DirectionalLight(0xffe6c4, 1.4); sun.position.set(-8, 10, 6);
+    this.look = { exposure: 0.88, bloom: [0.2, 0.6, 1.25] };
+    this.envTarget = skyEnvironment({ top: '#d9cfb8', mid: '#e8e2c9', horizon: '#fff4d8', sunDir: [-1, 0.3, 0], sunColor: '#fff2d0' }, 0x8a6a4a);
+    this.scene.environment = this.envTarget.texture;
+    this.own = [];
+    this.scene.add(new THREE.HemisphereLight(0xfff4e2, 0x6b6250, 0.7));
+    const sun = new THREE.DirectionalLight(0xffe6c4, 1.7); sun.position.set(-8, 10, 6);
     sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); sun.shadow.radius = 4; sun.shadow.normalBias = 0.02;
     Object.assign(sun.shadow.camera, { left: -9, right: 9, top: 9, bottom: -9, near: 1, far: 30 });
     this.scene.add(sun);
-    const room = this.room = buildClassroom();
+    const room = this.room = buildClassroom(this.own);
     this.scene.add(room);
 
     for (const [x, z] of DESKS) {
@@ -306,6 +313,7 @@ export class Level3 {
 
   dispose() {
     clearTimeout(this._pop);
+    this.envTarget.dispose(); this.own.forEach(o => o.dispose());
     this.el.remove();
     this.scene.traverse(o => { if (o.geometry && !o.userData.keep) o.geometry.dispose(); });
   }
