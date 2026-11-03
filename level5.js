@@ -1,5 +1,5 @@
 import { THREE, paint, mesh, photoTex, Timeline, sound } from './engine.js';
-import { skyEnvironment, plasterSet, tileSet } from './gfx.js';
+import { skyEnvironment, plasterSet, tileSet, roomShade, sunbeam, dustMotes } from './gfx.js';
 import { makeFigure } from './character.js';
 import { model } from './models.js';
 
@@ -93,7 +93,7 @@ function buildClinic(own) {
   hinge.add(mesh(new THREE.SphereGeometry(0.09, 10, 8), paint(0xd8c070, { roughness: 0.3, metalness: 0.8 }), -0.1, 2.05, 1.9));
   room.userData.door = hinge;
   // soft fluorescent light
-  const lamp = new THREE.PointLight(0xf4fbff, 18, 14, 1.4); lamp.position.set(0, 5.6, 0); room.add(lamp);
+  const lamp = new THREE.PointLight(0xf4fbff, 34, 14, 1.4); lamp.position.set(0, 5.6, 0); room.add(lamp);
   return room;
 }
 
@@ -129,16 +129,19 @@ export class Level5 {
     this.phase = 'ready';
     this.music = false;
 
-    this.look = { exposure: 0.84, bloom: [0.16, 0.55, 1.35] };
-    this.envTarget = skyEnvironment({ top: '#f4f6f0', mid: '#e0ece6', horizon: '#ffffff', sunDir: [0.3, 0.9, 0.2], sunColor: '#ffffff' }, 0xb9bdb4);
+    this.look = { exposure: 0.92, bloom: [0.34, 0.65, 1.05], grade: { contrast: 1.14, saturation: 1.08, vignette: 0.42 } };
+    this.envTarget = skyEnvironment({ top: '#6e7a74', mid: '#8a9a92', horizon: '#c8d2c8', sunDir: [0.3, 0.9, 0.2], sunColor: '#ffffff' }, 0x5a5f58);
     this.scene.environment = this.envTarget.texture;
     this.own = [];
-    this.scene.add(new THREE.HemisphereLight(0xffffff, 0x7a8a84, 0.7));
-    const sun = new THREE.DirectionalLight(0xfff4e4, 1.8); sun.position.set(4, 10, 7);
+    this.scene.add(new THREE.HemisphereLight(0xf4fbff, 0x5f6e68, 0.55));
+    const sun = new THREE.DirectionalLight(0xfff0dc, 1.15); sun.position.set(4, 10, 7);
     sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); sun.shadow.radius = 4; sun.shadow.normalBias = 0.02;
     Object.assign(sun.shadow.camera, { left: -9, right: 9, top: 9, bottom: -9, near: 1, far: 30 });
     this.scene.add(sun);
     const clinic = buildClinic(this.own); this.scene.add(clinic);
+    this.extras = [roomShade(-6.5, 6.5, -5, 19, 6.2, 'new', 1.8, 0.6), sunbeam({ win: [1.0, 4.2, 2.45, 4.95, -4.95], slope: [-0.5, 1.0], color: 0xfff0d2, floor: 0.34, air: 0.08 })];
+    this.scene.add(...this.extras);
+    this.dust = dustMotes(this.scene, [-2, 4, 0.5, 4.5, -4, 1.5], 60, 0xfff4e0);
     this.door = clinic.userData.door;
 
     this.doctor = makeFigure('doctor', 3.6);
@@ -279,6 +282,7 @@ export class Level5 {
   update(dt) {
     if (this.paused) return;
     this.t += dt;
+    this.dust.update(this.t);
     this.tl.update(dt);
     const P = this.patient;
     if (this.phase === 'run') {
@@ -334,7 +338,7 @@ export class Level5 {
   dispose() {
     clearTimeout(this._pop);
     this.toolTex.forEach(t => t.dispose());
-    this.envTarget.dispose(); this.own.forEach(o => o.dispose());
+    this.envTarget.dispose(); this.own.forEach(o => o.dispose()); this.dust.dispose(); this.extras.forEach(e => e.userData.dispose());
     this.el.remove(); this.pop.remove();
     this.scene.traverse(o => { if (o.geometry && !o.userData.keep) o.geometry.dispose(); });
   }

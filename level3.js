@@ -1,5 +1,5 @@
 import { THREE, paint, mesh, photoTex, Timeline, sound } from './engine.js';
-import { skyEnvironment, plasterSet } from './gfx.js';
+import { skyEnvironment, plasterSet, roomShade, dustMotes } from './gfx.js';
 import { makeFigure } from './character.js';
 import { model } from './models.js';
 
@@ -104,7 +104,7 @@ function buildClassroom(own) {
   put('plant', w / 2 - 0.9, -d / 2 + 0.9, 0.6);
 
   // afternoon sun through the windows
-  const beam = new THREE.SpotLight(0xffd9a6, 80, 18, 0.7, 0.9, 1.4);
+  const beam = new THREE.SpotLight(0xffcf94, 120, 20, 0.72, 0.8, 1.4);
   beam.position.set(-w / 2 + 0.5, 5.4, 0); beam.target.position.set(1, 0, 0.5);
   beam.castShadow = true; beam.shadow.mapSize.set(1024, 1024); beam.shadow.normalBias = 0.03;
   room.add(beam, beam.target);
@@ -126,17 +126,20 @@ export class Level3 {
     this.phase = 'ready';
     this.music = false;
 
-    this.look = { exposure: 0.88, bloom: [0.2, 0.6, 1.25] };
-    this.envTarget = skyEnvironment({ top: '#d9cfb8', mid: '#e8e2c9', horizon: '#fff4d8', sunDir: [-1, 0.3, 0], sunColor: '#fff2d0' }, 0x8a6a4a);
+    this.look = { exposure: 0.95, bloom: [0.24, 0.7, 1.3], grade: { contrast: 1.15, saturation: 1.06, vignette: 0.46 } };
+    this.envTarget = skyEnvironment({ top: '#5a5040', mid: '#766a52', horizon: '#c0ac84', sunDir: [-1, 0.3, 0], sunColor: '#fff2d0' }, 0x3f2e1e);
     this.scene.environment = this.envTarget.texture;
     this.own = [];
-    this.scene.add(new THREE.HemisphereLight(0xfff4e2, 0x6b6250, 0.7));
-    const sun = new THREE.DirectionalLight(0xffe6c4, 1.7); sun.position.set(-8, 10, 6);
+    this.scene.add(new THREE.HemisphereLight(0xfff4e2, 0x4f4636, 0.68));
+    const sun = new THREE.DirectionalLight(0xffdcb0, 1.1); sun.position.set(-8, 10, 6);
     sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); sun.shadow.radius = 4; sun.shadow.normalBias = 0.02;
     Object.assign(sun.shadow.camera, { left: -9, right: 9, top: 9, bottom: -9, near: 1, far: 30 });
     this.scene.add(sun);
     const room = this.room = buildClassroom(this.own);
     this.scene.add(room);
+    this.extras = [roomShade(-6.5, 6.5, -5.5, 5.5, 6.4, 'nsew', 1.9, 0.68)];
+    this.scene.add(...this.extras);
+    this.dust = dustMotes(this.scene, [-5.5, 2, 1, 5, -4, 4], 80);
 
     for (const [x, z] of DESKS) {
       const desk = model('schoolDesk');
@@ -297,6 +300,7 @@ export class Level3 {
   update(dt) {
     if (this.paused) return;
     this.t += dt;
+    this.dust.update(this.t);
     if (this.tl) this.tl.update(dt);
     if (this.phase === 'run' && !this.locked) {
       this.left -= dt;
@@ -313,7 +317,7 @@ export class Level3 {
 
   dispose() {
     clearTimeout(this._pop);
-    this.envTarget.dispose(); this.own.forEach(o => o.dispose());
+    this.envTarget.dispose(); this.own.forEach(o => o.dispose()); this.dust.dispose(); this.extras.forEach(e => e.userData.dispose());
     this.el.remove();
     this.scene.traverse(o => { if (o.geometry && !o.userData.keep) o.geometry.dispose(); });
   }

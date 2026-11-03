@@ -233,6 +233,10 @@ function applyLook(view) {
   [bloom.strength, bloom.radius, bloom.threshold] = L.bloom;
   bloom.enabled = !(look && quality.step >= 3);
   grade.enabled = !!look;
+  const G = (look && look.grade) || {};
+  grade.uniforms.contrast.value = G.contrast ?? 1.12;
+  grade.uniforms.saturation.value = G.saturation ?? 1.12;
+  grade.uniforms.vignette.value = G.vignette ?? 0.34;
   setSamples(look && quality.step < 1 ? Math.min(4, renderer.capabilities.maxSamples) : 0);
   setRatio(look && quality.step >= 2 ? Math.min(fullRatio, 1.15) : fullRatio);
   if (look && quality.step >= 3) view.scene.traverse(o => {

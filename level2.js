@@ -1,5 +1,5 @@
 import { THREE, paint, mesh, photoTex, Timeline, ease, sound } from './engine.js';
-import { skyEnvironment } from './gfx.js';
+import { skyEnvironment, roomShade, sunbeam, dustMotes } from './gfx.js';
 import { makeFigure } from './character.js';
 import { model } from './models.js';
 
@@ -68,14 +68,36 @@ const tiled = (url, rx, ry) => {
   return t;
 };
 
+function rugTex() {
+  const c = document.createElement('canvas'); c.width = 512; c.height = 360;
+  const g = c.getContext('2d');
+  g.fillStyle = '#5a1f1c'; g.fillRect(0, 0, 512, 360);
+  g.fillStyle = '#1e2a44'; g.fillRect(14, 14, 484, 332);
+  g.fillStyle = '#7a2a24'; g.fillRect(34, 34, 444, 292);
+  g.strokeStyle = '#c9a56a'; g.lineWidth = 3; g.strokeRect(24, 24, 464, 312); g.strokeRect(44, 44, 424, 272);
+  g.fillStyle = '#c9a56a';
+  for (let x = 62; x < 460; x += 32) for (const y of [29, 325]) { g.save(); g.translate(x, y); g.rotate(Math.PI / 4); g.fillRect(-4, -4, 8, 8); g.restore(); }
+  g.save(); g.translate(256, 180);
+  for (const [w, h, col] of [[300, 180, '#1e2a44'], [230, 130, '#a8452f'], [150, 84, '#c9a56a'], [80, 44, '#1e2a44']]) {
+    g.fillStyle = col; g.beginPath(); g.moveTo(-w / 2, 0); g.lineTo(0, -h / 2); g.lineTo(w / 2, 0); g.lineTo(0, h / 2); g.closePath(); g.fill();
+  }
+  g.restore();
+  // worn, as a real one would be
+  const im = g.getImageData(0, 0, 512, 360), d = im.data;
+  for (let i = 0; i < d.length; i += 4) { const n = (Math.random() - 0.5) * 34; d[i] += n; d[i + 1] += n; d[i + 2] += n; }
+  g.putImageData(im, 0, 0);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
+  return t;
+}
+
 // the family's flat in Jerusalem: golden stone walls, patterned tiles, the Old City through the window
 function buildApartment() {
   const room = new THREE.Group();
   const w = 12, d = 10, h = 6.4;
-  const floor = mesh(new THREE.PlaneGeometry(w, d), paint(0xffffff, { map: tiled('assets/tex_tiles.jpg', w / 2.4, d / 2.4), roughness: 0.75 }), 0, 0, 0);
+  const floor = mesh(new THREE.PlaneGeometry(w, d), paint(0xb3a692, { map: tiled('assets/tex_tiles.jpg', w / 2.4, d / 2.4), roughness: 0.42 }), 0, 0, 0);
   floor.rotation.x = -Math.PI / 2; floor.castShadow = false; room.add(floor);
   room.add(mesh(new THREE.BoxGeometry(w + 0.3, 0.35, 0.3), paint(0x8a6a4a, { roughness: 0.8 }), 0, -0.17, d / 2));
-  const stone = len => paint(0xf0e0c4, { map: tiled('assets/tex_stone.jpg', len / 3, h / 3), roughness: 0.95 });
+  const stone = len => paint(0xb5a58d, { map: tiled('assets/tex_stone.jpg', len / 3, h / 3), roughness: 0.95 });
   const wall = (len, x, z, ry) => {
     const g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = ry;
     const p = mesh(new THREE.PlaneGeometry(len, h), stone(len), 0, h / 2, 0); p.castShadow = false; g.add(p);
@@ -106,9 +128,13 @@ function buildApartment() {
   put('plant', 5.0, -4.2, 0.4);
 
   // late-afternoon Jerusalem light through the window
-  const beam = new THREE.SpotLight(0xffd59a, 70, 16, 0.65, 0.9, 1.5);
-  beam.position.set(2.8, 5.0, -d / 2 + 0.8); beam.target.position.set(-1.0, 0, -1.5);
+  const beam = new THREE.SpotLight(0xffc98a, 80, 18, 0.62, 0.8, 1.5);
+  beam.position.set(3.0, 5.2, -d / 2 + 0.5); beam.target.position.set(-1.6, 0.8, -2.4);
+  beam.castShadow = true; beam.shadow.mapSize.set(1024, 1024); beam.shadow.normalBias = 0.03; beam.shadow.radius = 5;
   room.add(beam, beam.target);
+  // an old rug under the piano
+  const rug = mesh(new THREE.PlaneGeometry(6.2, 4.4), paint(0xffffff, { map: rugTex(), roughness: 1 }), -1.7, 0.015, -2.2);
+  rug.rotation.set(-Math.PI / 2, 0, -0.45); rug.castShadow = false; room.add(rug);
   return room;
 }
 
@@ -124,16 +150,19 @@ export class Level2 {
     this.phase = 'ready';
     this.music = false;   // the song is the music
 
-    this.look = { exposure: 0.88, bloom: [0.22, 0.6, 1.2] };
-    // reflections from the room itself: warm stone, with the bright window on one side
-    this.envTarget = skyEnvironment({ top: '#cdb48c', mid: '#e8cf9f', horizon: '#fff0d0', sunDir: [0.6, 0.35, -0.7], sunColor: '#fff0d0' }, 0x8a6a4a);
+    this.look = { exposure: 1.08, bloom: [0.26, 0.7, 1.3], grade: { contrast: 1.16, saturation: 1.05, vignette: 0.5 } };
+    // reflections from the room itself: dim warm stone, with the bright window on one side
+    this.envTarget = skyEnvironment({ top: '#4a3a2a', mid: '#6a5238', horizon: '#a88860', sunDir: [0.6, 0.35, -0.7], sunColor: '#ffe6b8' }, 0x3a2a1c);
     this.scene.environment = this.envTarget.texture;
-    this.scene.add(new THREE.HemisphereLight(0xfff1dc, 0x6a5a48, 0.65));
-    const sun = this.sun = new THREE.DirectionalLight(0xffe2bc, 2.1); sun.position.set(3, 11, 8);
+    this.scene.add(new THREE.HemisphereLight(0xffe6c4, 0x4a3a2a, 0.7));
+    const sun = this.sun = new THREE.DirectionalLight(0xffdcae, 1.0); sun.position.set(3, 11, 8);
     sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); sun.shadow.radius = 4; sun.shadow.normalBias = 0.02;
     Object.assign(sun.shadow.camera, { left: -8, right: 8, top: 8, bottom: -8, near: 1, far: 30 });
     this.scene.add(sun);
     this.scene.add(buildApartment());
+    this.extras = [roomShade(-6, 6, -5, 5, 6.4, 'new', 1.9, 0.72), sunbeam({ win: [1.3, 4.3, 1.5, 5.1, -4.95], slope: [-0.72, 0.82], floor: 0.3, air: 0.045 })];
+    this.scene.add(...this.extras);
+    this.dust = dustMotes(this.scene, [-2.5, 3.5, 0.5, 4.8, -4.2, 0]);
 
     // the piano, angled out from the back wall so the camera at its side sees Relu's face and hands
     const set = this.set = new THREE.Group();
@@ -144,7 +173,7 @@ export class Level2 {
     const bench = model('pianoBench');
     if (bench) { bench.scale.y *= 0.7; bench.position.z = 1.25; set.add(bench); }   // seat at his hips, not his chest
     set.add(makeMusicBook());
-    const lamp = new THREE.PointLight(0xffc98a, 9, 7, 1.6);   // warm light on the piano and his face
+    const lamp = new THREE.PointLight(0xffc98a, 10, 7, 1.6);   // warm light on the piano and his face
     lamp.position.set(1.4, 3.6, 2.2); set.add(lamp);
 
     // Relu on the bench, the teacher standing at the far end of the keyboard, facing him and us
@@ -374,6 +403,7 @@ export class Level2 {
     this.t += dt;
     if (this.phase === 'run') this.updateSong(dt);
     if (this.tl) this.tl.update(dt);
+    this.dust.update(this.t);
     const done = this.phase === 'done';
     // Relu sits up straight with his hands on the keys, plays while the song runs, and throws his arms up at the end;
     // the teacher nods along, then cheers when he finishes
@@ -395,7 +425,7 @@ export class Level2 {
   dispose() {
     this.cv.removeEventListener('pointerdown', this.onDown);
     this.cv.remove();
-    this.envTarget.dispose();
+    this.envTarget.dispose(); this.dust.dispose(); this.extras.forEach(e => e.userData.dispose());
     this.scene.traverse(o => { if (o.geometry && !o.userData.keep) o.geometry.dispose(); });
   }
 }

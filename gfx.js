@@ -228,9 +228,104 @@ export function cloudSprite(seed) {
   return new THREE.Sprite(new THREE.SpriteMaterial({ map: t, transparent: true, depthWrite: false, fog: false }));
 }
 
+// Soft shade where walls meet the floor and each other: the darkening real rooms have in their corners.
+// x0..x1, z0..z1 is the room; walls lists which sides are real ('n', 's', 'e', 'w').
+let aoTex = null;
+export function roomShade(x0, x1, z0, z1, h, walls = 'nsew', size = 1.5, strength = 0.55) {
+  if (!aoTex) {
+    const [c, g] = canvas2d(4, 64), gr = g.createLinearGradient(0, 0, 0, 64);
+    gr.addColorStop(0, 'rgba(0,0,0,1)'); gr.addColorStop(0.35, 'rgba(0,0,0,.42)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = gr; g.fillRect(0, 0, 4, 64);
+    aoTex = new THREE.CanvasTexture(c);
+  }
+  const mat = new THREE.MeshBasicMaterial({ map: aoTex, transparent: true, opacity: strength, depthWrite: false, color: 0x120a04, fog: false, side: THREE.DoubleSide });
+  const G = new THREE.Group();
+  // a strip starting at the crease and fading out across a surface
+  const strip = (ax, ay, az, bx, by, bz, ox, oy, oz) => {
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute([ax, ay, az, bx, by, bz, bx + ox, by + oy, bz + oz, ax + ox, ay + oy, az + oz], 3));
+    geo.setAttribute('uv', new THREE.Float32BufferAttribute([0, 1, 1, 1, 1, 0, 0, 0], 2));
+    geo.setIndex([0, 1, 2, 0, 2, 3]);
+    const m = new THREE.Mesh(geo, mat); m.renderOrder = 1; G.add(m);
+  };
+  const e = 0.012;
+  if (walls.includes('n')) { strip(x0, e, z0 + e, x1, e, z0 + e, 0, 0, size); strip(x0, e, z0 + e, x1, e, z0 + e, 0, size, 0); }
+  if (walls.includes('s')) { strip(x0, e, z1 - e, x1, e, z1 - e, 0, 0, -size); strip(x0, e, z1 - e, x1, e, z1 - e, 0, size, 0); }
+  if (walls.includes('w')) { strip(x0 + e, e, z0, x0 + e, e, z1, size, 0, 0); strip(x0 + e, e, z0, x0 + e, e, z1, 0, size, 0); }
+  if (walls.includes('e')) { strip(x1 - e, e, z0, x1 - e, e, z1, -size, 0, 0); strip(x1 - e, e, z0, x1 - e, e, z1, 0, size, 0); }
+  // upright corners, and under the ceiling
+  const cn = [['n', 'w', x0, z0, 1, 1], ['n', 'e', x1, z0, -1, 1], ['s', 'w', x0, z1, 1, -1], ['s', 'e', x1, z1, -1, -1]];
+  for (const [a, b, x, z, sx, sz] of cn) if (walls.includes(a) && walls.includes(b)) {
+    strip(x, 0, z + sz * e, x, h, z + sz * e, sx * size * 0.8, 0, 0);
+    strip(x + sx * e, 0, z, x + sx * e, h, z, 0, 0, sz * size * 0.8);
+  }
+  if (walls.includes('n')) strip(x0, h, z0 + e, x1, h, z0 + e, 0, -size * 0.8, 0);
+  if (walls.includes('w')) strip(x0 + e, h, z0, x0 + e, h, z1, 0, -size * 0.8, 0);
+  if (walls.includes('e')) strip(x1 - e, h, z0, x1 - e, h, z1, 0, -size * 0.8, 0);
+  G.userData.dispose = () => { G.traverse(o => o.geometry?.dispose()); mat.dispose(); };
+  return G;
+}
+
+// Sunlight through a window: the bright panes thrown on the floor, and a faint shaft of light in the air.
+// win = [x0, x1, yBottom, yTop, z] on a wall facing +z; slope = [dx, dz] the sun moves per unit it falls.
+export function sunbeam({ win, slope, color = 0xffd9a0, floor = 0.5, air = 0.13, panes = [2, 3] }) {
+  const [x0, x1, y0, y1, z] = win, [dx, dz] = slope;
+  const G = new THREE.Group();
+  const onFloor = (x, y) => [x + dx * y, 0.02, z + dz * y];
+  // the patch on the floor, with the window bars in it
+  const [c, g] = canvas2d(256, 256);
+  g.filter = 'blur(5px)'; g.fillStyle = '#fff';
+  const pw = 256 / panes[0], ph = 256 / panes[1];
+  for (let i = 0; i < panes[0]; i++) for (let j = 0; j < panes[1]; j++) g.fillRect(i * pw + 8, j * ph + 8, pw - 16, ph - 16);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+  const pts = [onFloor(x0, y0), onFloor(x1, y0), onFloor(x1, y1), onFloor(x0, y1)].flat();
+  const patch = new THREE.BufferGeometry();
+  patch.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+  patch.setAttribute('uv', new THREE.Float32BufferAttribute([0, 0, 1, 0, 1, 1, 0, 1], 2));
+  patch.setIndex([0, 2, 1, 0, 3, 2]);
+  const pm = new THREE.MeshBasicMaterial({ map: t, color, transparent: true, opacity: floor, depthWrite: false, blending: THREE.AdditiveBlending, fog: false, side: THREE.DoubleSide });
+  const pmesh = new THREE.Mesh(patch, pm); pmesh.renderOrder = 2; G.add(pmesh);
+  // the shaft: fades from the window down to the floor
+  const [c2, g2] = canvas2d(4, 64), gr = g2.createLinearGradient(0, 0, 0, 64);
+  gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+  g2.fillStyle = gr; g2.fillRect(0, 0, 4, 64);
+  const t2 = new THREE.CanvasTexture(c2);
+  const am = new THREE.MeshBasicMaterial({ map: t2, color, transparent: true, opacity: air, depthWrite: false, blending: THREE.AdditiveBlending, fog: false, side: THREE.DoubleSide });
+  for (const [xa, ya] of [[x0, y0], [x1, y0], [x0, y1], [x1, y1], [(x0 + x1) / 2, (y0 + y1) / 2]]) {
+    // sheets running from the window's edge along the sun's direction
+    const geo = new THREE.BufferGeometry(), w = (x1 - x0) * 0.5, A = [xa - w * 0.5, ya, z], B = [xa + w * 0.5, ya, z], C = onFloor(xa + w * 0.5, ya), D = onFloor(xa - w * 0.5, ya);
+    geo.setAttribute('position', new THREE.Float32BufferAttribute([...A, ...B, ...C, ...D], 3));
+    geo.setAttribute('uv', new THREE.Float32BufferAttribute([0, 1, 1, 1, 1, 0, 0, 0], 2));
+    geo.setIndex([0, 1, 2, 0, 2, 3]);
+    const m = new THREE.Mesh(geo, am); m.renderOrder = 3; G.add(m);
+  }
+  G.userData.dispose = () => { G.traverse(o => o.geometry?.dispose()); pm.dispose(); am.dispose(); t.dispose(); t2.dispose(); };
+  return G;
+}
+
+// Dust drifting in the light
+export function dustMotes(scene, [x0, x1, y0, y1, z0, z1], n = 70, color = 0xffe6c0, size = 0.05) {
+  const rand = rng(77), base = [], geo = new THREE.BufferGeometry(), P = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) base.push([x0 + rand() * (x1 - x0), y0 + rand() * (y1 - y0), z0 + rand() * (z1 - z0), rand() * 6]);
+  geo.setAttribute('position', new THREE.BufferAttribute(P, 3));
+  const [c, g] = canvas2d(16, 16), gr = g.createRadialGradient(8, 8, 0, 8, 8, 8);
+  gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = gr; g.fillRect(0, 0, 16, 16);
+  const tex = new THREE.CanvasTexture(c);
+  const pts = new THREE.Points(geo, new THREE.PointsMaterial({ map: tex, size, color, transparent: true, opacity: 0.75, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }));
+  pts.frustumCulled = false; pts.renderOrder = 4; scene.add(pts);
+  return {
+    update(t) {
+      base.forEach(([x, y, z, p], i) => { P[i * 3] = x + Math.sin(t * 0.21 + p) * 0.35; P[i * 3 + 1] = y + Math.sin(t * 0.13 + p * 2) * 0.3; P[i * 3 + 2] = z + Math.cos(t * 0.17 + p) * 0.35; });
+      geo.attributes.position.needsUpdate = true;
+    },
+    dispose() { geo.dispose(); pts.material.dispose(); tex.dispose(); },
+  };
+}
+
 // ---------- the colour finish that goes after tone mapping ----------
 export const GradeShader = {
-  uniforms: { tDiffuse: { value: null }, contrast: { value: 1.08 }, saturation: { value: 1.12 }, vignette: { value: 0.28 }, tint: { value: new THREE.Vector3(1.01, 1, 0.975) } },
+  uniforms: { tDiffuse: { value: null }, contrast: { value: 1.12 }, saturation: { value: 1.12 }, vignette: { value: 0.34 }, tint: { value: new THREE.Vector3(1.01, 1, 0.975) } },
   vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
   fragmentShader: `uniform sampler2D tDiffuse; uniform float contrast, saturation, vignette; uniform vec3 tint; varying vec2 vUv;
     void main(){

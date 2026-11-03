@@ -37,10 +37,11 @@ function prepRig(gltf) {
 // Other rigged people (Meshy models, Mixamo skeleton); each is optional until its file exists.
 // `m` is the real height Meshy rigged the model at.
 const FIGURES = {
-  mom: { url: 'assets/mom_1958.glb', m: 1.7 },
-  dad: { url: 'assets/dad_1958.glb', m: 1.78 },
+  // (these three have textures cut into thousands of tiny pieces: blending between sizes of the image draws scratches along every cut)
+  mom: { url: 'assets/mom_1958.glb', m: 1.7, sharp: true },
+  dad: { url: 'assets/dad_1958.glb', m: 1.78, sharp: true },
   kid: { url: 'assets/relu_kid.glb', m: 1.4 },       // Relu at about 10, Jerusalem 1966
-  teacher: { url: 'assets/teacher.glb', m: 1.6 },    // his piano teacher
+  teacher: { url: 'assets/teacher.glb', m: 1.6, sharp: true },    // his piano teacher
   teen: { url: 'assets/relu_teen.glb', m: 1.55 },    // Relu at 13, Leyada 1969
   classmate: { url: 'assets/classmate.glb', m: 1.5 },
   mathTeacher: { url: 'assets/math_teacher.glb', m: 1.75 },
@@ -67,7 +68,10 @@ export async function loadCharacters(keys = []) {
 
 export function loadFigures(keys) {
   return Promise.all(keys.filter(k => FIGURES[k]).map(k => pending[k] ||= (async () => {
-    try { figures[k] = prepRig(await loadGltf(FIGURES[k].url)); } catch { /* fall back to the hand-built figures */ }
+    try {
+      figures[k] = prepRig(await loadGltf(FIGURES[k].url));
+      if (FIGURES[k].sharp) figures[k].scene.traverse(o => { const t = o.material?.map; if (t) { t.generateMipmaps = false; t.minFilter = THREE.LinearFilter; t.needsUpdate = true; } });
+    } catch { /* fall back to the hand-built figures */ }
   })()));
 }
 
