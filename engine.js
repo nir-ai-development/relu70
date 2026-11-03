@@ -34,10 +34,17 @@ export function matte(material, rough = 0.92) {
 }
 
 // ---------- image-based lighting shared by every scene ----------
-let env = null;
+let env = null, envRenderer = null;
 export function studioEnv(renderer) {
+  envRenderer = renderer;
   if (!env) env = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
   return env;
+}
+// the same, but lit by a scene of the level's own (dispose the returned render target with the level)
+export function skyEnvFrom(scene) {
+  const pm = new THREE.PMREMGenerator(envRenderer), target = pm.fromScene(scene, 0.02);
+  pm.dispose();
+  return target;
 }
 
 // ---------- gradient sky dome with a soft sun glow ----------

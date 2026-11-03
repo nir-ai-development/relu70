@@ -4,6 +4,8 @@ import { EffectComposer } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examp
 import { RenderPass } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/postprocessing/RenderPass.js/+esm';
 import { UnrealBloomPass } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/postprocessing/UnrealBloomPass.js/+esm';
 import { OutputPass } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/postprocessing/OutputPass.js/+esm';
+import { ShaderPass } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/postprocessing/ShaderPass.js/+esm';
+import { GradeShader } from './gfx.js';
 import { makeBabyRelu, makeSuitcase, loadCharacters, loadFigures } from './character.js';
 import { Level1 } from './level1.js';
 import { Level2 } from './level2.js';
@@ -205,6 +207,53 @@ composer.addPass(renderPass);
 const bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.06, 0.5, 0.97);
 composer.addPass(bloom);
 composer.addPass(new OutputPass());
+const grade = new ShaderPass(GradeShader);
+composer.addPass(grade);
+grade.enabled = false;
+
+// A level can ask for the polished look with a `look` field; the others keep the plain finish above.
+// Phones that can't hold the frame rate step down, for the rest of the visit:
+// 0 full, 1 sharper edges off, 2 lower resolution, 3 also no glow and rougher shadows
+const fullRatio = renderer.getPixelRatio();
+const quality = { step: 0, t: 0, frames: 0 };
+const PLAIN = { exposure: 0.92, bloom: [0.06, 0.5, 0.97] };
+let activeLook = null;
+function setSamples(n) {
+  if (composer.renderTarget1.samples === n) return;
+  for (const rt of [composer.renderTarget1, composer.renderTarget2]) { rt.samples = n; rt.dispose(); }
+}
+function setRatio(r) {
+  if (renderer.getPixelRatio() === r) return;
+  renderer.setPixelRatio(r); composer.setPixelRatio(r);
+}
+function applyLook(view) {
+  const look = view.look || null;
+  const L = look || PLAIN;
+  renderer.toneMappingExposure = L.exposure;
+  [bloom.strength, bloom.radius, bloom.threshold] = L.bloom;
+  bloom.enabled = !(look && quality.step >= 3);
+  grade.enabled = !!look;
+  setSamples(look && quality.step < 1 ? Math.min(4, renderer.capabilities.maxSamples) : 0);
+  setRatio(look && quality.step >= 2 ? Math.min(fullRatio, 1.15) : fullRatio);
+  if (look && quality.step >= 3) view.lowerQuality?.();
+  activeLook = view;
+  quality.t = quality.frames = 0;
+}
+// average two seconds of frames at a time; a stall (a hidden tab, a level loading) doesn't count
+function watchFrameRate(raw) {
+  if (quality.locked) return;
+  if (raw > 0.25) { quality.t = quality.frames = 0; return; }
+  quality.t += raw; quality.frames++;
+  if (quality.t < 2) return;
+  const fps = quality.frames / quality.t;
+  quality.t = quality.frames = 0;
+  if (fps < 40 && quality.step < 3) { quality.step++; applyLook(activeLook); }
+}
+function draw(v) {
+  if (activeLook !== v) applyLook(v);
+  renderPass.scene = v.scene; renderPass.camera = v.camera;
+  composer.render();
+}
 
 // ---------- title scene: toddler Relu with his suitcase on a little island ----------
 class TitleScene {
@@ -464,13 +513,13 @@ onResize();
 
 let last = performance.now();
 renderer.setAnimationLoop(now => {
-  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  const raw = (now - last) / 1000, dt = Math.min(0.05, raw); last = now;
   const v = app.view;
   if (v === app.title && !$('screen-title').hidden) return;   // the title picture covers the 3D street: save the phone's battery
   v.update(dt);
   if (!v.scene.environment) v.scene.environment = env;
-  renderPass.scene = v.scene; renderPass.camera = v.camera;
-  composer.render();
+  draw(v);
+  if (v.look) watchFrameRate(raw);
 });
 
 // for quick testing: #level1 jumps straight into the level
@@ -479,6 +528,7 @@ if (jump && LEVELS[jump[1] - 1]?.make) { app.levelIndex = jump[1] - 1; app.start
 if (location.hash.endsWith('debug')) {
   window.app = app;
   // testing aid: draw a frame on demand (the animation loop stops while the page is hidden)
-  app.renderNow = () => { const v = app.view; renderPass.scene = v.scene; renderPass.camera = v.camera; composer.render(); };
+  app.renderNow = () => draw(app.view);
+  app.quality = quality; app.renderer = renderer; app.setQuality = s => { quality.locked = true; quality.step = s; applyLook(app.view); };
   import('./testkit.js').catch(() => {});
 }
