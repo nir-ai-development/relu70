@@ -120,6 +120,17 @@ p { margin: 0; line-height: 1.55; }
 /* story postcard */
 .story { width: min(760px, 100%); display: grid; grid-template-columns: 1fr 1.15fr; gap: 22px; align-items: center; }
 @media (max-width: 640px) { .story { grid-template-columns: 1fr; } }
+/* phones upright: the photos get only the room left over by the text, so the play button stays on screen */
+@media (max-width: 640px) and (min-height: 501px) {
+  .story { gap: 14px; }
+  .story .photos { min-height: 0; height: clamp(150px, calc(100svh - 440px), 330px); margin-bottom: 8px; }
+  .story .photos img:only-child { width: auto; height: 100%; max-width: 80%; object-fit: cover; display: block; margin-inline: auto; }
+  .story .photos img { width: auto; height: 78%; max-width: 62%; object-fit: cover; }
+  .story .photos img:nth-child(2) { width: auto; }
+  .story-text { gap: 8px; }
+  .story-text h2 { font-size: 30px; }
+  .story-text p { font-size: 16px; }
+}
 .photos { position: relative; min-height: 350px; }
 .photos img:only-child { position: relative; width: 80%; }
 .photos img { position: absolute; background: #fff; padding: 8px 8px 22px; box-shadow: 0 6px 16px rgba(0,0,0,.3); width: 58%; }
@@ -323,24 +334,24 @@ p { margin: 0; line-height: 1.55; }
 <div id="loading" dir="rtl" role="status"><span id="loading-text">טוען את העולם…</span><div class="bar wait"><i id="loading-fill"></i></div></div>
 <div id="fade"></div>
 
-<meta name="build" content="1103094553">
+<meta name="build" content="1110220250">
 <script type="importmap">
 {
  "imports": {
-  "./character.js": "./character.js?v=1103094553",
-  "./engine.js": "./engine.js?v=1103094553",
-  "./gfx.js": "./gfx.js?v=1103094553",
-  "./level1.js": "./level1.js?v=1103094553",
-  "./level2.js": "./level2.js?v=1103094553",
-  "./level3.js": "./level3.js?v=1103094553",
-  "./level4.js": "./level4.js?v=1103094553",
-  "./level5.js": "./level5.js?v=1103094553",
-  "./level6.js": "./level6.js?v=1103094553",
-  "./level7.js": "./level7.js?v=1103094553",
-  "./level8.js": "./level8.js?v=1103094553",
-  "./main.js": "./main.js?v=1103094553",
-  "./models.js": "./models.js?v=1103094553",
-  "./props1.js": "./props1.js?v=1103094553"
+  "./character.js": "./character.js?v=1110220250",
+  "./engine.js": "./engine.js?v=1110220250",
+  "./gfx.js": "./gfx.js?v=1110220250",
+  "./level1.js": "./level1.js?v=1110220250",
+  "./level2.js": "./level2.js?v=1110220250",
+  "./level3.js": "./level3.js?v=1110220250",
+  "./level4.js": "./level4.js?v=1110220250",
+  "./level5.js": "./level5.js?v=1110220250",
+  "./level6.js": "./level6.js?v=1110220250",
+  "./level7.js": "./level7.js?v=1110220250",
+  "./level8.js": "./level8.js?v=1110220250",
+  "./main.js": "./main.js?v=1110220250",
+  "./models.js": "./models.js?v=1110220250",
+  "./props1.js": "./props1.js?v=1110220250"
  }
 }
 </script>
